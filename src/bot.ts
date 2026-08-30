@@ -75,12 +75,9 @@ if (bot) {
             return ctx.reply('⛔ هذا الأمر مخصص للأدمن فقط.');
         }
 
-        const symbol = ctx.message.text.split(' ')[1];
-        if (!symbol) {
-            return ctx.reply('يرجى تحديد العملة، مثال:\n/analyze BTCUSDT');
-        }
+        const symbol = ctx.message.text.split(' ')[1] || '';
 
-        ctx.reply(`جاري تشغيل محرك التحليل لـ ${symbol}...`);
+        ctx.reply(`جاري تشغيل محرك التحليل...`);
         await engine.startAnalysis(symbol);
     });
 
