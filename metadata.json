@@ -1,6 +1,6 @@
 {
-  "name": "Forex Paper Trading",
-  "description": "A Forex paper trading platform streaming live prices via WebSockets.",
+  "name": "Alawites Trading",
+  "description": "Elite Multi-Asset Terminal & AI Quant with Admin Approval & Telegram Cron",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,61 +1,34 @@
 import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import WebSocket from 'ws';
+import dotenv from 'dotenv';
 import path from 'path';
-import 'dotenv/config';
+import { bot } from './src/bot.ts';
+
+dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Setup Finnhub WebSocket
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
-if (!FINNHUB_KEY) {
-  console.error('FINNHUB_API_KEY environment variable is required');
-}
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(process.cwd(), 'public')));
 
-const socket = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`);
-
-// Throttle configuration
-const lastSent = new Map<string, number>();
-const THROTTLE_MS = 500; // 2 updates per second max
-
-socket.on('open', () => {
-  console.log('Connected to Finnhub');
-  // Subscribe to symbols
-  socket.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:EUR_USD' }));
-  socket.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:GBP_USD' }));
+// Basic route to check if server is running
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'active', message: 'Trading Backend is running successfully.' });
 });
 
-socket.on('message', (data: WebSocket.RawData) => {
-  const message = JSON.parse(data.toString());
-  if (message.type === 'trade') {
-    message.data.forEach((trade: any) => {
-      const { s: symbol, p: price, t: timestamp } = trade;
-      
-      // Throttle updates
-      if (Date.now() - (lastSent.get(symbol) || 0) > THROTTLE_MS) {
-        io.emit('priceUpdate', { symbol, price, timestamp });
-        lastSent.set(symbol, Date.now());
-      }
-    });
-  }
+// Basic route to serve the trading page (keep it available just in case)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'trading-page.html'));
 });
 
-socket.on('close', () => {
-  console.log('Finnhub connection closed. Implement reconnection logic here.');
-});
-
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(process.cwd(), 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
-  });
-}
-
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`✅ Server is running on port ${PORT}`);
+    
+    // Initialize Bot
+    if (bot) {
+        bot.launch().then(() => console.log('🤖 Telegram Bot is online and listening.'));
+    } else {
+        console.log('⚠️ Telegram Bot Token not provided, bot is offline. Set TELEGRAM_BOT_TOKEN.');
+    }
 });

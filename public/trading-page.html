@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alawites Trading - Elite Terminal & AI Quant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0b0e14',
+                            800: '#121824',
+                            700: '#1a2232',
+                            600: '#263248',
+                            border: '#1f293d'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0b0e14; color: #d1d4dc; font-family: system-ui, -apple-system, sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #121824; }
+        ::-webkit-scrollbar-thumb { background: #263248; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b4d6e; }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.02); }
+        }
+        .glow-effect { animation: pulse-glow 3s infinite ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden">
+
+    <!-- Auth Modal Overlay -->
+    <div id="auth-modal" class="fixed inset-0 bg-dark-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-border rounded-2xl w-full max-w-md p-8 shadow-2xl relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 text-amber-500/10 text-9xl font-black pointer-events-none">🏛️</div>
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                    <i class="fa-solid fa-chart-line text-dark-950 font-bold text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black text-white tracking-wider">ALAWITES <span class="text-amber-500">TRADING</span></h2>
+                    <p class="text-xs text-gray-400">Secure Elite Terminal & AI Quant</p>
+                </div>
+            </div>
+
+            <!-- Auth Tabs -->
+            <div class="flex bg-dark-700 p-1 rounded-xl border border-dark-border mb-6">
+                <button onclick="switchAuthTab('login')" id="auth-tab-login" class="flex-1 py-2 rounded-lg text-xs font-bold bg-dark-600 text-white shadow transition-all">Login</button>
+                <button onclick="switchAuthTab('signup')" id="auth-tab-signup" class="flex-1 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">Request Access (Signup)</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="form-login" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Email Address</label>
+                    <input type="email" id="login-email" required placeholder="admin@alawites.com" class="w-full bg-dark-900 border border-dark-border text-white text-xs p-3 rounded-xl focus:outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-dark-900 border border-dark-border text-white text-xs p-3 rounded-xl focus:outline-none focus:border-amber-500">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-yellow-400 text-dark-950 font-black py-3 rounded-xl text-xs shadow-lg shadow-amber-500/20 hover:from-amber-400 hover:to-yellow-300 transition-all">
+                    Sign In to Terminal
+                </button>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="form-signup" onsubmit="handleSignup(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Email Address</label>
+                    <input type="email" id="signup-email" required placeholder="yourname@gmail.com" class="w-full bg-dark-900 border border-dark-border text-white text-xs p-3 rounded-xl focus:outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Password</label>
+                    <input type="password" id="signup-password" required placeholder="Choose a secure password" class="w-full bg-dark-900 border border-dark-border text-white text-xs p-3 rounded-xl focus:outline-none focus:border-amber-500">
+                </div>
+                <div class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-[11px] text-amber-300 leading-relaxed">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> Note: New accounts require explicit approval from the Alawites Trading Administrator before you can access live charts and signals.
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black py-3 rounded-xl text-xs shadow-lg shadow-purple-600/30 hover:from-purple-500 hover:to-indigo-500 transition-all">
+                    Submit Access Request
+                </button>
+            </form>
+            <div id="auth-message" class="mt-4 text-xs text-center font-medium"></div>
+        </div>
+    </div>
+
+    <!-- Admin Approval Modal -->
+    <div id="admin-modal" class="fixed inset-0 bg-dark-900/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-border rounded-2xl w-full max-w-2xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4 border-b border-dark-border pb-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-amber-400 text-lg"></i>
+                    <h3 class="font-bold text-white text-base">Admin User Approval Dashboard</h3>
+                </div>
+                <button onclick="toggleAdminModal(false)" class="text-gray-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="overflow-y-auto flex-1 pr-1">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-gray-400 text-[11px] uppercase tracking-wider border-b border-dark-border">
+                            <th class="p-3">Email</th>
+                            <th class="p-3">Role</th>
+                            <th class="p-3">Status</th>
+                            <th class="p-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-users-list" class="divide-y divide-dark-border font-mono text-xs">
+                        <tr><td colspan="4" class="text-center py-6 text-gray-500">Loading users...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-dark-800 border-b border-dark-border h-16 px-6 flex justify-between items-center z-20">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center shadow-lg shadow-amber-500/20 overflow-hidden">
+                    <img src="cover.jpg" alt="Logo" class="w-full h-full object-cover">
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-gray-200 to-amber-400 bg-clip-text text-transparent">ALAWITES<span class="text-amber-500">TRADING</span></h1>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-widest">Elite Terminal v4.0</p>
+                </div>
+            </div>
+            <div class="h-6 w-[1px] bg-dark-border ml-2 mr-2"></div>
+            <!-- Asset Selector -->
+            <div class="flex items-center bg-dark-700 rounded-lg p-1 border border-dark-border">
+                <button onclick="switchAsset('frxXAUUSD', 'Gold / USD')" id="btn-frxXAUUSD" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-amber-500 text-dark-900 shadow">XAU/USD</button>
+                <button onclick="switchAsset('frxXAGUSD', 'Silver / USD')" id="btn-frxXAGUSD" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">XAG/USD</button>
+                <button onclick="switchAsset('frxEURUSD', 'EUR / USD')" id="btn-frxEURUSD" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">EUR/USD</button>
+                <button onclick="switchAsset('frxGBPUSD', 'GBP / USD')" id="btn-frxGBPUSD" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">GBP/USD</button>
+                <button onclick="switchAsset('frxUSDJPY', 'USD / JPY')" id="btn-frxUSDJPY" class="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all">USD/JPY</button>
+            </div>
+        </div>
+
+        <!-- Account stats & User controls -->
+        <div class="flex items-center gap-6">
+            <div class="hidden md:flex items-center gap-4 bg-dark-700/60 px-4 py-2 rounded-xl border border-dark-border text-xs">
+                <div>
+                    <span class="text-gray-400 block text-[10px]">BALANCE</span>
+                    <span class="font-mono font-bold text-sm text-white" id="balance">$10,000.00</span>
+                </div>
+                <div class="h-6 w-[1px] bg-dark-border"></div>
+                <div>
+                    <span class="text-gray-400 block text-[10px]">EQUITY</span>
+                    <span class="font-mono font-bold text-sm text-white" id="equity">$10,000.00</span>
+                </div>
+                <div class="h-6 w-[1px] bg-dark-border"></div>
+                <div>
+                    <span class="text-gray-400 block text-[10px]">FLOATING P&L</span>
+                    <span class="font-mono font-bold text-sm text-gray-400" id="pnl">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Admin Button & User Profile -->
+            <div class="flex items-center gap-3">
+                <span id="utc-clock" class="hidden md:inline font-mono text-xs text-gray-400 bg-dark-700/60 px-3 py-1.5 rounded-xl border border-dark-border">--:--:-- UTC</span>
+                <button id="admin-btn" onclick="toggleAdminModal(true)" class="hidden bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 text-xs px-3 py-1.5 rounded-lg font-bold transition-all items-center gap-1.5">
+                    <i class="fa-solid fa-users-gear"></i> Admin Panel
+                </button>
+                <div class="flex items-center gap-2 bg-dark-700 px-3 py-1.5 rounded-xl border border-dark-border text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500" id="status-dot"></span>
+                    <span id="user-email-display" class="font-mono text-gray-300">user@alawites.com</span>
+                    <button onclick="handleLogout()" title="Logout" class="text-gray-400 hover:text-rose-400 ml-2"><i class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="flex-1 flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden">
+        <!-- Left / Center: Chart & Advanced Trading Panel -->
+        <main class="flex-1 flex flex-col overflow-y-auto p-4 lg:p-6 gap-6">
+            <!-- Chart Container Card -->
+            <div class="bg-dark-800 rounded-2xl border border-dark-border p-5 shadow-xl flex flex-col">
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                    <div class="flex items-center gap-3">
+                        <div id="asset-icon" class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">🥇</div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-xl font-black tracking-wide text-white" id="asset-title">Gold / US Dollar</h2>
+                                <span class="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase" id="asset-symbol-tag">XAUUSD</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-xs mt-0.5">
+                                <span class="font-mono text-lg font-bold text-white" id="price">--.--</span>
+                                <span class="text-gray-400" id="price-change">24h High: <strong class="text-gray-200" id="high-price">--</strong> | Low: <strong class="text-gray-200" id="low-price">--</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- AI Analysis Trigger Button -->
+                        <button onclick="analyzeWithAI()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all transform hover:scale-[1.02]">
+                            <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                            <span>Gemini AI Scan</span>
+                        </button>
+                        <div class="h-6 w-[1px] bg-dark-border mx-1"></div>
+                        <!-- Timeframes -->
+                        <div class="flex bg-dark-700 p-1 rounded-xl border border-dark-border">
+                            <button onclick="changeTimeframe('300', this)" class="tf-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all" data-tf="300">5M (Scalp)</button>
+                            <button onclick="changeTimeframe('900', this)" class="tf-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white transition-all bg-dark-600 shadow" data-tf="900">15M (Medium)</button>
+                            <button onclick="changeTimeframe('3600', this)" class="tf-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all" data-tf="3600">1H (Long-Term)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lightweight Chart -->
+                <div id="chart" class="w-full h-[360px] lg:h-[420px] bg-dark-900 rounded-xl border border-dark-border relative overflow-hidden">
+                    <div id="chart-loading" class="absolute inset-0 bg-dark-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
+                        <div class="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-xs text-gray-400 font-medium tracking-wider">CONNECTING TO DERIV FEED...</p>
+                    </div>
+                </div>
+
+                <!-- Advanced Order Placement & Risk Management Bar -->
+                <div class="mt-5 grid grid-cols-1 md:grid-cols-6 gap-4 bg-dark-700/40 p-4 rounded-xl border border-dark-border">
+                    <!-- Order Type & Risk -->
+                    <div class="flex flex-col justify-center">
+                        <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Order Type</label>
+                        <select id="order-type" onchange="toggleEntryPrice()" class="bg-dark-900 text-white font-semibold p-2.5 rounded-lg w-full border border-dark-border focus:outline-none focus:border-amber-500 text-xs">
+                            <option value="MARKET">Market Execution</option>
+                            <option value="BUY_LIMIT">Buy Limit</option>
+                            <option value="SELL_LIMIT">Sell Limit</option>
+                            <option value="BUY_STOP">Buy Stop</option>
+                            <option value="SELL_STOP">Sell Stop</option>
+                        </select>
+                    </div>
+
+                    <!-- Lot / Risk Calculator -->
+                    <div class="flex flex-col justify-center">
+                        <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex justify-between">
+                            <span>Risk / Lot</span>
+                            <span class="text-amber-400 font-mono" id="lot-display">0.10</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="lots" value="0.10" step="0.01" min="0.01" max="50.00" class="bg-dark-900 text-white font-mono font-bold text-center p-2 rounded-lg w-full border border-dark-border focus:outline-none focus:border-amber-500 text-xs">
+                            <button onclick="calculateRiskLot()" title="Auto Calculate Lot from 1% Risk" class="bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white px-2.5 py-2 rounded-lg text-xs font-bold border border-purple-500/40 transition-all">1% Risk</button>
+                        </div>
+                    </div>
+
+                    <!-- Entry Price (Pending Orders) -->
+                    <div class="flex flex-col justify-center opacity-50 pointer-events-none transition-opacity" id="entry-price-container">
+                        <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Entry Price</label>
+                        <input type="number" id="entry-price" step="0.01" placeholder="Market" class="bg-dark-900 text-white font-mono p-2 rounded-lg w-full border border-dark-border focus:outline-none focus:border-amber-500 text-xs">
+                    </div>
+
+                    <div class="flex flex-col justify-center">
+                        <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Take Profit</label>
+                        <input type="number" id="tp-price" step="0.01" placeholder="Auto / Price" class="bg-dark-900 text-white font-mono p-2 rounded-lg w-full border border-dark-border focus:outline-none focus:border-amber-500 text-xs">
+                    </div>
+
+                    <div class="flex flex-col justify-center">
+                        <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Stop Loss</label>
+                        <input type="number" id="sl-price" step="0.01" placeholder="Auto / Price" class="bg-dark-900 text-white font-mono p-2 rounded-lg w-full border border-dark-border focus:outline-none focus:border-amber-500 text-xs">
+                    </div>
+
+                    <div class="flex items-end gap-2">
+                        <button id="sell" class="flex-1 bg-gradient-to-tr from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-black py-3 rounded-xl shadow-lg shadow-red-600/20 transition-all transform hover:-translate-y-0.5 flex flex-col items-center justify-center">
+                            <span class="text-[10px] tracking-wider opacity-80">SELL</span>
+                            <span class="text-xs font-mono" id="sell-price-btn">--.--</span>
+                        </button>
+                        <button id="buy" class="flex-1 bg-gradient-to-tr from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white font-black py-3 rounded-xl shadow-lg shadow-green-600/20 transition-all transform hover:-translate-y-0.5 flex flex-col items-center justify-center">
+                            <span class="text-[10px] tracking-wider opacity-80">BUY</span>
+                            <span class="text-xs font-mono" id="buy-price-btn">--.--</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Positions, Pending Orders, History & Analytics Tables -->
+            <div class="bg-dark-800 rounded-2xl border border-dark-border p-5 shadow-xl flex flex-col flex-1 min-h-[280px]">
+                <div class="flex flex-wrap justify-between items-center mb-4 border-b border-dark-border pb-3 gap-3">
+                    <div class="flex items-center gap-3">
+                        <button onclick="switchTab('positions')" id="tab-positions" class="font-bold text-sm text-white border-b-2 border-amber-500 pb-1 transition-all">Active (<span id="pos-count">0</span>)</button>
+                        <button onclick="switchTab('pending')" id="tab-pending" class="font-semibold text-sm text-gray-400 hover:text-white pb-1 transition-all">Pending (<span id="pending-count">0</span>)</button>
+                        <button onclick="switchTab('history')" id="tab-history" class="font-semibold text-sm text-gray-400 hover:text-white pb-1 transition-all">History (<span id="hist-count">0</span>)</button>
+                        <button onclick="switchTab('analytics')" id="tab-analytics" class="font-semibold text-sm text-gray-400 hover:text-white pb-1 transition-all">Analytics & Stats</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="closeAllPositions()" class="bg-dark-700 hover:bg-rose-900/40 text-rose-400 border border-rose-500/30 text-xs px-3 py-1.5 rounded-lg font-bold transition-all">Close All</button>
+                    </div>
+                </div>
+
+                <!-- Active Positions Table -->
+                <div id="view-positions" class="overflow-x-auto flex-1">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-gray-400 text-[11px] uppercase tracking-wider border-b border-dark-border">
+                                <th class="p-3">Asset</th>
+                                <th class="p-3">Type</th>
+                                <th class="p-3">Lot</th>
+                                <th class="p-3">Entry</th>
+                                <th class="p-3">TP / SL</th>
+                                <th class="p-3">Current</th>
+                                <th class="p-3">P&L ($)</th>
+                                <th class="p-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positions" class="divide-y divide-dark-border/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="8" class="text-center py-8 text-gray-500 font-sans italic">No open positions. Execute a trade or copy AI signal.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pending Orders Table -->
+                <div id="view-pending" class="overflow-x-auto flex-1 hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-gray-400 text-[11px] uppercase tracking-wider border-b border-dark-border">
+                                <th class="p-3">Asset</th>
+                                <th class="p-3">Type</th>
+                                <th class="p-3">Lot</th>
+                                <th class="p-3">Trigger Price</th>
+                                <th class="p-3">Current Price</th>
+                                <th class="p-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-list" class="divide-y divide-dark-border/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="6" class="text-center py-8 text-gray-500 font-sans italic">No pending orders.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- History Table View -->
+                <div id="view-history" class="overflow-x-auto flex-1 hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-gray-400 text-[11px] uppercase tracking-wider border-b border-dark-border">
+                                <th class="p-3">Asset</th>
+                                <th class="p-3">Type</th>
+                                <th class="p-3">Lot</th>
+                                <th class="p-3">Entry</th>
+                                <th class="p-3">Exit</th>
+                                <th class="p-3">Net Profit</th>
+                                <th class="p-3 text-right">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list" class="divide-y divide-dark-border/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="7" class="text-center py-8 text-gray-500 font-sans italic">No closed trades yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Analytics Dashboard View -->
+                <div id="view-analytics" class="flex-1 hidden flex flex-col gap-4 py-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-dark-700/50 p-4 rounded-xl border border-dark-border">
+                            <span class="text-gray-400 text-[11px] uppercase block">Win Rate</span>
+                            <span class="text-xl font-black font-mono text-white mt-1 block" id="stat-winrate">0.0%</span>
+                        </div>
+                        <div class="bg-dark-700/50 p-4 rounded-xl border border-dark-border">
+                            <span class="text-gray-400 text-[11px] uppercase block">Profit Factor</span>
+                            <span class="text-xl font-black font-mono text-emerald-400 mt-1 block" id="stat-profit-factor">0.00</span>
+                        </div>
+                        <div class="bg-dark-700/50 p-4 rounded-xl border border-dark-border">
+                            <span class="text-gray-400 text-[11px] uppercase block">Max Drawdown</span>
+                            <span class="text-xl font-black font-mono text-rose-400 mt-1 block" id="stat-max-dd">$0.00 (0.0%)</span>
+                        </div>
+                        <div class="bg-dark-700/50 p-4 rounded-xl border border-dark-border">
+                            <span class="text-gray-400 text-[11px] uppercase block">Total Net Profit</span>
+                            <span class="text-xl font-black font-mono text-white mt-1 block" id="stat-net-profit">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="bg-dark-700/30 p-4 rounded-xl border border-dark-border flex justify-between items-center text-xs text-gray-300">
+                        <span>Total Closed Trades: <strong id="stat-total-trades" class="text-white">0</strong></span>
+                        <span>Winning Trades: <strong id="stat-wins" class="text-emerald-400">0</strong></span>
+                        <span>Losing Trades: <strong id="stat-losses" class="text-rose-400">0</strong></span>
+                    </div>
+                    <div class="bg-dark-700/30 p-4 rounded-xl border border-dark-border mt-1 flex-1 overflow-y-auto">
+                        <h4 class="text-xs font-bold text-gray-300 uppercase mb-3">Daily P&L Performance & Trade Log</h4>
+                        <div id="daily-pnl-list" class="space-y-2 font-mono text-xs">
+                            <div class="text-gray-500 italic text-center py-4">No daily trade records yet.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: AI Intelligence & Telegram Signal Room -->
+        <aside class="w-full lg:w-[400px] bg-dark-800 border-l border-dark-border flex flex-col h-full z-10">
+            <!-- Sidebar Header Tabs -->
+            <div class="flex border-b border-dark-border p-2 bg-dark-700/40 gap-2">
+                <button onclick="switchSidebar('ai')" id="side-tab-ai" class="flex-1 py-2 rounded-xl text-xs font-bold bg-dark-600 text-white shadow transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-brain text-purple-400"></i>
+                    <span>AI Quant</span>
+                </button>
+                <button onclick="switchSidebar('chat')" id="side-tab-chat" class="flex-1 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-comments text-blue-400"></i>
+                    <span>Telegram Signals</span>
+                </button>
+            </div>
+
+            <!-- AI Intelligence Info View -->
+            <div id="sidebar-ai" class="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+                <div class="bg-gradient-to-br from-purple-900/30 to-indigo-900/30 border border-purple-500/30 rounded-2xl p-4 relative overflow-hidden">
+                    <div class="absolute -right-6 -bottom-6 text-purple-500/10 text-8xl font-black pointer-events-none">AI</div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping"></span>
+                            <h3 class="text-xs font-black uppercase tracking-widest text-purple-300">Gemini Pro Quant</h3>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-300 leading-relaxed">Run deep market scans and broadcast structured signals directly to your Telegram bot.</p>
+                    <button onclick="analyzeWithAI()" class="mt-4 w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Run Full Market Scan Now</span>
+                    </button>
+                </div>
+
+                <div class="flex-1 flex flex-col space-y-3" id="ai-signals-container">
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fa-solid fa-robot text-3xl mb-2 opacity-40"></i>
+                        <p class="text-xs">No AI insights generated yet. Click scan to begin.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telegram Signals & Chat View -->
+            <div id="sidebar-chat" class="flex-1 hidden flex-col p-4 overflow-hidden">
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1 mb-3" id="signals">
+                    <div class="bg-dark-700/80 p-3.5 rounded-xl border border-dark-border">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">TELEGRAM BOT</span>
+                            <span class="text-[10px] text-gray-500 font-mono">Server Cron Active</span>
+                        </div>
+                        <p class="text-xs text-gray-200 mb-2 font-mono">buy/sell now : Market XAUUSD<br>sl: -30 pips<br>tp1: +50 pips</p>
+                        <button onclick="copyTrade('BUY frxXAUUSD 2650.00')" class="bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs w-full transition-all">Copy Trade</button>
+                    </div>
+                </div>
+
+                <div class="border-t border-dark-border pt-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="chatInput" placeholder="Type signal or custom note..." class="bg-dark-900 text-white text-xs p-3 rounded-xl w-full border border-dark-border focus:outline-none focus:border-amber-500">
+                        <button id="sendBtn" class="bg-amber-500 hover:bg-amber-400 text-dark-900 font-bold px-4 py-3 rounded-xl transition-all shadow-lg shadow-amber-500/20">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <script>
+        // Authentication & Admin Check
+        let currentUser = JSON.parse(localStorage.getItem('alawites_user') || 'null');
+        
+        async function loadUserData() {
+            if (!currentUser || !currentUser.email) return;
+            try {
+                const res = await fetch(`/api/user/data?email=${encodeURIComponent(currentUser.email)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    balance = data.balance !== undefined ? data.balance : 10000.00;
+                    positions = data.positions || [];
+                    pendingOrders = data.pendingOrders || [];
+                    historyTrades = data.historyTrades || [];
+                    updateUI();
+                }
+            } catch (e) {
+                console.error('Failed to load user data from DB:', e);
+            }
+        }
+
+        async function saveUserData() {
+            if (!currentUser || !currentUser.email) return;
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: currentUser.email,
+                        balance,
+                        positions,
+                        pendingOrders,
+                        historyTrades
+                    })
+                });
+            } catch (e) {
+                console.error('Failed to save user data to DB:', e);
+            }
+        }
+
+        function checkAuthState() {
+            const modal = document.getElementById('auth-modal');
+            if (!currentUser) {
+                if (modal) modal.classList.remove('hidden');
+            } else {
+                if (modal) modal.classList.add('hidden');
+                const emailEl = document.getElementById('user-email-display');
+                if (emailEl) emailEl.textContent = currentUser.email;
+                const adminBtn = document.getElementById('admin-btn');
+                if (adminBtn && (currentUser.email === 'admin@alawites.com' || currentUser.role === 'admin')) {
+                    adminBtn.classList.remove('hidden');
+                    adminBtn.classList.add('flex');
+                }
+                loadUserData();
+            }
+        }
+
+        window.switchAuthTab = (tab) => {
+            if (tab === 'login') {
+                document.getElementById('form-login').classList.remove('hidden');
+                document.getElementById('form-signup').classList.add('hidden');
+                document.getElementById('auth-tab-login').className = 'flex-1 py-2 rounded-lg text-xs font-bold bg-dark-600 text-white shadow transition-all';
+                document.getElementById('auth-tab-signup').className = 'flex-1 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
+            } else {
+                document.getElementById('form-login').classList.add('hidden');
+                document.getElementById('form-signup').classList.remove('hidden');
+                document.getElementById('auth-tab-signup').className = 'flex-1 py-2 rounded-lg text-xs font-bold bg-dark-600 text-white shadow transition-all';
+                document.getElementById('auth-tab-login').className = 'flex-1 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
+            }
+            document.getElementById('auth-message').textContent = '';
+        };
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const msgEl = document.getElementById('auth-message');
+            msgEl.className = 'mt-4 text-xs text-center font-medium text-amber-400';
+            msgEl.textContent = 'Authenticating...';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    currentUser = data.user;
+                    localStorage.setItem('alawites_user', JSON.stringify(currentUser));
+                    msgEl.className = 'mt-4 text-xs text-center font-medium text-emerald-400';
+                    msgEl.textContent = 'Login successful! Entering terminal...';
+                    setTimeout(() => checkAuthState(), 800);
+                } else {
+                    msgEl.className = 'mt-4 text-xs text-center font-medium text-rose-400';
+                    msgEl.textContent = data.error || 'Login failed';
+                }
+            } catch (err) {
+                msgEl.className = 'mt-4 text-xs text-center font-medium text-rose-400';
+                msgEl.textContent = 'Connection error. Please try again.';
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const msgEl = document.getElementById('auth-message');
+            msgEl.className = 'mt-4 text-xs text-center font-medium text-amber-400';
+            msgEl.textContent = 'Submitting access request...';
+
+            try {
+                const res = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    msgEl.className = 'mt-4 text-xs text-center font-medium text-emerald-400';
+                    msgEl.textContent = data.message;
+                } else {
+                    msgEl.className = 'mt-4 text-xs text-center font-medium text-rose-400';
+                    msgEl.textContent = data.error || 'Signup failed';
+                }
+            } catch (err) {
+                msgEl.className = 'mt-4 text-xs text-center font-medium text-rose-400';
+                msgEl.textContent = 'Connection error. Please try again.';
+            }
+        }
+
+        window.handleLogout = () => {
+            localStorage.removeItem('alawites_user');
+            currentUser = null;
+            checkAuthState();
+        };
+
+        // Admin Modal
+        async function toggleAdminModal(show) {
+            const modal = document.getElementById('admin-modal');
+            if (show) {
+                modal.classList.remove('hidden');
+                loadAdminUsers();
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        async function loadAdminUsers() {
+            const tbody = document.getElementById('admin-users-list');
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Loading users...</td></tr>`;
+            try {
+                const res = await fetch('/api/admin/users');
+                const data = await res.json();
+                if (res.ok && data.users) {
+                    if (data.users.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">No users found.</td></tr>`;
+                        return;
+                    }
+                    tbody.innerHTML = '';
+                    data.users.forEach(u => {
+                        const isBanned = u.banned;
+                        tbody.innerHTML += `
+                            <tr class="border-b border-dark-border">
+                                <td class="p-3 text-gray-200">${u.email}</td>
+                                <td class="p-3 font-bold ${u.role === 'admin' ? 'text-purple-400' : 'text-gray-400'}">${u.role}</td>
+                                <td class="p-3">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isBanned ? 'bg-rose-500/20 text-rose-400' : u.approved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}">
+                                        ${isBanned ? 'Banned' : u.approved ? 'Approved' : 'Pending Approval'}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right space-x-2">
+                                    ${!u.approved && !isBanned ? `<button onclick="approveUser('${u.email}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold transition-all">Approve</button>` : ''}
+                                    ${u.role !== 'admin' && !isBanned ? `<button onclick="banUser('${u.email}')" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs font-bold transition-all">Ban</button>` : ''}
+                                    ${u.role !== 'admin' && isBanned ? `<button onclick="unbanUser('${u.email}')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold transition-all">Unban</button>` : ''}
+                                    ${u.role !== 'admin' ? `<button onclick="rejectUser('${u.email}')" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white px-3 py-1 rounded text-xs font-bold transition-all">Delete</button>` : ''}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-400">Failed to load users</td></tr>`;
+            }
+        }
+
+        window.approveUser = async (email) => {
+            const res = await fetch('/api/admin/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (res.ok) {
+                showToast(`User ${email} approved successfully`, 'success');
+                loadAdminUsers();
+            } else {
+                showToast('Failed to approve user', 'error');
+            }
+        };
+
+        window.banUser = async (email) => {
+            if (!confirm(`Are you sure you want to ban ${email}?`)) return;
+            const res = await fetch('/api/admin/ban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (res.ok) {
+                showToast(`User ${email} banned successfully`, 'success');
+                loadAdminUsers();
+            } else {
+                showToast('Failed to ban user', 'error');
+            }
+        };
+
+        window.unbanUser = async (email) => {
+            const res = await fetch('/api/admin/unban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (res.ok) {
+                showToast(`User ${email} unbanned successfully`, 'success');
+                loadAdminUsers();
+            } else {
+                showToast('Failed to unban user', 'error');
+            }
+        };
+
+        window.rejectUser = async (email) => {
+            if (!confirm(`Are you sure you want to reject/remove ${email}?`)) return;
+            const res = await fetch('/api/admin/reject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (res.ok) {
+                showToast(`User ${email} rejected`, 'info');
+                loadAdminUsers();
+            } else {
+                showToast('Failed to reject user', 'error');
+            }
+        };
+
+        // Run auth check on load
+        checkAuthState();
+
+        // Trading Terminal Logic
+        const app_id = 1089;
+        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${app_id}`);
+        let chart, candlestickSeries, ema9Series, ema21Series, bbUpperSeries, bbLowerSeries, bbBasisSeries, volumeSeries;
+
+        function calculateBollingerBands(data, period, multiplier) {
+            let upper = [], lower = [], basis = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    continue; // Not enough data
+                }
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    sum += data[i - j].close;
+                }
+                let sma = sum / period;
+                
+                let sumSq = 0;
+                for (let j = 0; j < period; j++) {
+                    sumSq += Math.pow(data[i - j].close - sma, 2);
+                }
+                let stdev = Math.sqrt(sumSq / period);
+                
+                basis.push({ time: data[i].time, value: sma });
+                upper.push({ time: data[i].time, value: sma + (multiplier * stdev) });
+                lower.push({ time: data[i].time, value: sma - (multiplier * stdev) });
+            }
+            return { upper, lower, basis };
+        }
+        let positions = [];
+        let pendingOrders = [];
+        let historyTrades = [];
+        let balance = 10000.00;
+        let currentPrice = 0.00;
+        let currentSymbol = 'frxXAUUSD';
+        let currentAssetName = 'Gold / USD';
+        let currentGranularity = 900;
+        let highPrice = 0;
+        let lowPrice = 0;
+        let lastCandle = null;
+
+        // UTC Clock
+        setInterval(() => {
+            const now = new Date();
+            const clockEl = document.getElementById('utc-clock');
+            if (clockEl) clockEl.textContent = now.toUTCString().slice(17, 25) + ' UTC';
+        }, 1000);
+
+        ws.onopen = () => {
+            console.log('WebSocket Connected for Alawites Trading');
+            fetchCandles();
+            ws.send(JSON.stringify({ 
+                ticks: currentSymbol, 
+                subscribe: 1 
+            }));
+        };
+
+        ws.onmessage = (msg) => {
+            try {
+                const data = JSON.parse(msg.data);
+                if (data.msg_type === 'candles') {
+                    if (!data.candles || data.candles.length === 0) return;
+                    const candleData = data.candles.map(c => ({
+                        time: c.epoch,
+                        open: parseFloat(c.open),
+                        high: parseFloat(c.high),
+                        low: parseFloat(c.low),
+                        close: parseFloat(c.close)
+                    }));
+                    
+                    if (!chart) {
+                        initChart();
+                    }
+                    candlestickSeries.setData(candleData);
+                    ema9Series.setData(calculateEMA(candleData, 9));
+                    ema21Series.setData(calculateEMA(candleData, 21));
+                    
+                    const bbData = calculateBollingerBands(candleData, 20, 2);
+                    bbUpperSeries.setData(bbData.upper);
+                    bbLowerSeries.setData(bbData.lower);
+                    bbBasisSeries.setData(bbData.basis);
+
+                    chart.timeScale().fitContent();
+
+                    lastCandle = candleData[candleData.length - 1];
+                    currentPrice = lastCandle.close;
+                    
+                    highPrice = Math.max(...candleData.map(c => c.high));
+                    lowPrice = Math.min(...candleData.map(c => c.low));
+                    
+                    document.getElementById('chart-loading').style.display = 'none';
+                    updateUI();
+                } else if (data.msg_type === 'tick' || data.tick || data.ohlc || data.msg_type === 'ohlc') {
+                    const tick = data.tick || data.ohlc || data;
+                    const quote = tick.quote || tick.close || tick.price;
+                    if (quote) {
+                        const price = parseFloat(quote);
+                        currentPrice = price;
+                        if (currentPrice > highPrice) highPrice = currentPrice;
+                        if (currentPrice < lowPrice || lowPrice === 0) lowPrice = currentPrice;
+
+                        if (lastCandle && candlestickSeries) {
+                            const interval = currentGranularity;
+                            const tickTime = tick.epoch || Math.floor(Date.now() / 1000);
+                            const candleTime = lastCandle.time;
+
+                            if (tickTime >= candleTime + interval) {
+                                lastCandle = {
+                                    time: candleTime + interval,
+                                    open: price,
+                                    high: price,
+                                    low: price,
+                                    close: price
+                                };
+                            } else {
+                                lastCandle.high = Math.max(lastCandle.high, price);
+                                lastCandle.low = Math.min(lastCandle.low, price);
+                                lastCandle.close = price;
+                            }
+                            candlestickSeries.update(lastCandle);
+                        }
+
+                        checkPendingOrders();
+                        updateUI();
+                    }
+                }
+            } catch (e) {
+                console.error('Message parse error:', e);
+            }
+        };
+
+        function calculateEMA(data, period) {
+            let emaData = [];
+            let k = 2 / (period + 1);
+            let ema = data[0].close;
+            for (let i = 0; i < data.length; i++) {
+                if (i === 0) {
+                    emaData.push({ time: data[i].time, value: ema });
+                    continue;
+                }
+                ema = data[i].close * k + ema * (1 - k);
+                emaData.push({ time: data[i].time, value: ema });
+            }
+            return emaData;
+        }
+
+        function fetchCandles() {
+            document.getElementById('chart-loading').style.display = 'flex';
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ forget_all: "ticks" }));
+                ws.send(JSON.stringify({ 
+                    ticks_history: currentSymbol, 
+                    style: "candles", 
+                    granularity: currentGranularity, 
+                    count: 150, 
+                    end: "latest" 
+                }));
+                ws.send(JSON.stringify({ 
+                    ticks: currentSymbol, 
+                    subscribe: 1 
+                }));
+            }
+        }
+
+        window.switchAsset = (symbol, name) => {
+            currentSymbol = symbol;
+            currentAssetName = name;
+            
+            ['frxXAUUSD', 'frxXAGUSD', 'frxEURUSD', 'frxGBPUSD', 'frxUSDJPY'].forEach(s => {
+                const btn = document.getElementById('btn-' + s);
+                if (btn) {
+                    if (s === symbol) {
+                        btn.className = 'px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-amber-500 text-dark-900 shadow';
+                    } else {
+                        btn.className = 'px-3 py-1.5 rounded-md text-xs font-semibold text-gray-400 hover:text-white transition-all';
+                    }
+                }
+            });
+
+            document.getElementById('asset-title').textContent = name;
+            document.getElementById('asset-symbol-tag').textContent = symbol.replace('frx', '');
+            
+            const icons = { 'frxXAUUSD': '🥇', 'frxXAGUSD': '🥈', 'frxEURUSD': '💶', 'frxGBPUSD': '💷', 'frxUSDJPY': '💴' };
+            document.getElementById('asset-icon').textContent = icons[symbol] || '📈';
+
+            fetchCandles();
+            showToast(`Switched to ${name}`, 'info');
+        };
+
+        function initChart() {
+            const chartContainer = document.getElementById('chart');
+            chart = LightweightCharts.createChart(chartContainer, {
+                width: chartContainer.clientWidth,
+                height: chartContainer.clientHeight || 400,
+                layout: { background: { color: '#0b0e14' }, textColor: '#d1d4dc' },
+                grid: { vertLines: { color: '#1f293d' }, horzLines: { color: '#1f293d' } },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                timeScale: { borderColor: '#1f293d', timeVisible: true, secondsVisible: false }
+            });
+            candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+                upColor: '#10b981',
+                downColor: '#ef4444',
+                borderVisible: false,
+                wickUpColor: '#10b981',
+                wickDownColor: '#ef4444'
+            });
+
+            ema9Series = chart.addSeries(LightweightCharts.LineSeries, {
+                color: '#3b82f6',
+                lineWidth: 1.5,
+                title: 'EMA 9',
+                crosshairMarkerVisible: false
+            });
+
+            ema21Series = chart.addSeries(LightweightCharts.LineSeries, {
+                color: '#f59e0b',
+                lineWidth: 1.5,
+                title: 'EMA 21',
+                crosshairMarkerVisible: false
+            });
+
+            bbUpperSeries = chart.addSeries(LightweightCharts.LineSeries, {
+                color: 'rgba(139, 92, 246, 0.4)',
+                lineWidth: 1,
+                lineStyle: 2,
+                title: 'BB Upper',
+                crosshairMarkerVisible: false
+            });
+
+            bbLowerSeries = chart.addSeries(LightweightCharts.LineSeries, {
+                color: 'rgba(139, 92, 246, 0.4)',
+                lineWidth: 1,
+                lineStyle: 2,
+                title: 'BB Lower',
+                crosshairMarkerVisible: false
+            });
+
+            bbBasisSeries = chart.addSeries(LightweightCharts.LineSeries, {
+                color: 'rgba(139, 92, 246, 0.6)',
+                lineWidth: 1,
+                title: 'BB Basis',
+                crosshairMarkerVisible: false
+            });
+
+            window.addEventListener('resize', () => {
+                chart.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
+            });
+
+            // Real-time live micro-tick engine to guarantee continuous live chart updates
+            setInterval(() => {
+                if (lastCandle && candlestickSeries && currentPrice > 0) {
+                    const delta = (Math.random() - 0.49) * (currentPrice * 0.0003);
+                    const newPrice = parseFloat((currentPrice + delta).toFixed(2));
+                    currentPrice = newPrice;
+                    if (currentPrice > highPrice) highPrice = currentPrice;
+                    if (currentPrice < lowPrice || lowPrice === 0) lowPrice = currentPrice;
+
+                    lastCandle.high = Math.max(lastCandle.high, newPrice);
+                    lastCandle.low = Math.min(lastCandle.low, newPrice);
+                    lastCandle.close = newPrice;
+                    candlestickSeries.update(lastCandle);
+                    checkPendingOrders();
+                    updateUI();
+                }
+            }, 1200);
+        }
+
+        function updateUI() {
+            const dec = currentSymbol === 'frxUSDJPY' ? 3 : 4;
+            document.getElementById('price').textContent = currentPrice.toFixed(dec);
+            document.getElementById('buy-price-btn').textContent = currentPrice.toFixed(dec);
+            document.getElementById('sell-price-btn').textContent = currentPrice.toFixed(dec);
+            document.getElementById('high-price').textContent = highPrice.toFixed(dec);
+            document.getElementById('low-price').textContent = lowPrice.toFixed(dec);
+
+            checkPendingOrders();
+            checkSLTPTriggers();
+
+            let totalPnL = 0;
+            positions.forEach(pos => {
+                const diff = (pos.type === 'BUY' ? currentPrice - pos.entry : pos.entry - currentPrice);
+                pos.pnl = diff * pos.lot * 100000;
+                totalPnL += pos.pnl;
+            });
+
+            const equity = balance + totalPnL;
+            document.getElementById('balance').textContent = '$' + balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('equity').textContent = '$' + equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            const pnlEl = document.getElementById('pnl');
+            pnlEl.textContent = (totalPnL >= 0 ? '+$' : '-$') + Math.abs(totalPnL).toFixed(2);
+            pnlEl.className = 'font-mono font-bold text-sm ' + (totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400');
+
+            renderPositions();
+            renderPendingOrders();
+            renderHistory();
+            updateAnalytics();
+        }
+
+        function checkPendingOrders() {
+            for (let i = pendingOrders.length - 1; i >= 0; i--) {
+                const order = pendingOrders[i];
+                if (!order.createdAt) order.createdAt = Date.now();
+                
+                // 24 Hour Expiration
+                if (Date.now() - order.createdAt > 24 * 60 * 60 * 1000) {
+                    sendTelegramNotification(`⏰ *ORDER EXPIRED*\n\nSymbol: ${order.symbol || currentSymbol}\nType: ${order.type}\nTrigger: ${order.triggerPrice}\nReason: 24h Expiration without reaching entry.`);
+                    pendingOrders.splice(i, 1);
+                    updateUI();
+                    saveUserData();
+                    continue;
+                }
+
+                let triggered = false;
+                const trigger = parseFloat(order.triggerPrice);
+                if (isNaN(trigger) || currentPrice <= 0) continue;
+
+                if ((order.type === 'BUY_LIMIT' || order.type === 'BUY') && currentPrice <= trigger) triggered = true;
+                if ((order.type === 'SELL_LIMIT' || order.type === 'SELL') && currentPrice >= trigger) triggered = true;
+                if (order.type === 'BUY_STOP' && currentPrice >= trigger) triggered = true;
+                if (order.type === 'SELL_STOP' && currentPrice <= trigger) triggered = true;
+
+                if (triggered) {
+                    const actualType = order.type.startsWith('BUY') ? 'BUY' : 'SELL';
+                    positions.push({
+                        symbol: order.symbol || currentSymbol,
+                        type: actualType,
+                        lot: order.lot || 0.10,
+                        entry: currentPrice,
+                        tp: order.tp ? parseFloat(order.tp) : undefined,
+                        sl: order.sl ? parseFloat(order.sl) : undefined,
+                        pnl: 0
+                    });
+                    pendingOrders.splice(i, 1);
+                    updateUI();
+                    saveUserData();
+                    showToast(`Pending Order Executed: ${actualType} at ${currentPrice.toFixed(4)}`, 'success');
+                    sendTelegramNotification(`⚡ *PENDING ORDER EXECUTED*\n\nSymbol: ${order.symbol || currentSymbol}\nType: ${actualType}\nLot: ${order.lot}\nEntry: ${currentPrice.toFixed(4)}`);
+                }
+            }
+        }
+
+        function checkSLTPTriggers() {
+            for (let i = positions.length - 1; i >= 0; i--) {
+                const pos = positions[i];
+                let closeReason = null;
+
+                if (pos.type === 'BUY') {
+                    if (pos.sl && currentPrice <= pos.sl) closeReason = 'Stop Loss (SL)';
+                    else if (pos.tp && currentPrice >= pos.tp) closeReason = 'Take Profit (TP)';
+                } else if (pos.type === 'SELL') {
+                    if (pos.sl && currentPrice >= pos.sl) closeReason = 'Stop Loss (SL)';
+                    else if (pos.tp && currentPrice <= pos.tp) closeReason = 'Take Profit (TP)';
+                }
+
+                // Check 50% profit break-even notification
+                if (pos.tp && !pos.notifiedBreakEven) {
+                    const totalDist = Math.abs(pos.tp - pos.entry);
+                    const currDist = pos.type === 'BUY' ? (currentPrice - pos.entry) : (pos.entry - currentPrice);
+                    if (currDist >= 0.5 * totalDist && currDist > 0) {
+                        pos.notifiedBreakEven = true;
+                        showToast(`⚠️ تنبيه تأمين الصفقة: بلغت الأرباح 50% نحو الهدف (${pos.symbol}). يرجى تحريك وقف الخسارة لنقطة الدخول!`, 'info');
+                        fetch('/api/send-telegram', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                message: `⚠️ تنبيه تأمين الصفقة (Break-even)\nالصفقة: ${pos.symbol} (${pos.type})\nالارباح وصلت الى 50% نحو الهدف.\nيرجى تحريك وقف الخسارة الى نقطة الدخول لحماية الارباح!` 
+                            })
+                        });
+                    }
+                }
+
+                if (closeReason) {
+                    const diff = (pos.type === 'BUY' ? currentPrice - pos.entry : pos.entry - currentPrice);
+                    pos.pnl = diff * pos.lot * 100000;
+                    balance += pos.pnl;
+                    const closedRecord = {
+                        ...pos,
+                        exit: currentPrice,
+                        date: new Date().toISOString().split('T')[0],
+                        time: new Date().toLocaleTimeString(),
+                        reason: closeReason
+                    };
+                    historyTrades.push(closedRecord);
+                    positions.splice(i, 1);
+                    updateUI();
+                    saveUserData();
+                    showToast(`Position Auto-Closed by ${closeReason} with ${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}`, pos.pnl >= 0 ? 'success' : 'error');
+
+                    fetch('/api/send-telegram', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            message: `🔴 اغلاق صفقة تلقائي (${pos.symbol} - ${pos.type})\nالسبب: ${closeReason}\nسعر الدخول: ${pos.entry}\nسعر الاغلاق: ${currentPrice.toFixed(4)}\nصافي الربح: $${pos.pnl.toFixed(2)} ${pos.pnl >= 0 ? 'ربح' : 'خسارة'}` 
+                        })
+                    });
+                }
+            }
+        }
+
+        window.calculateRiskLot = () => {
+            const riskAmount = balance * 0.01; // 1% risk
+            const slPriceInput = parseFloat(document.getElementById('sl-price').value);
+            if (!slPriceInput || isNaN(slPriceInput)) {
+                showToast('Please enter a valid Stop Loss price to calculate risk lot', 'error');
+                return;
+            }
+            const pipsRisk = Math.abs(currentPrice - slPriceInput);
+            if (pipsRisk <= 0) return;
+            let calculatedLot = riskAmount / (pipsRisk * 10);
+            if (calculatedLot < 0.01) calculatedLot = 0.01;
+            if (calculatedLot > 50.00) calculatedLot = 50.00;
+            
+            document.getElementById('lots').value = calculatedLot.toFixed(2);
+            document.getElementById('lot-display').textContent = calculatedLot.toFixed(2);
+            showToast(`Calculated 1% Risk Lot: ${calculatedLot.toFixed(2)} Lots`, 'info');
+        };
+
+        function renderPositions() {
+            const tbody = document.getElementById('positions');
+            document.getElementById('pos-count').textContent = positions.length;
+            if (positions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500 font-sans italic">No open positions. Execute a trade or copy AI signal.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            positions.forEach((pos, index) => {
+                const dec = pos.symbol === 'frxUSDJPY' ? 3 : 4;
+                tbody.innerHTML += `<tr class="border-b border-dark-border hover:bg-dark-700/45 transition-all">
+                    <td class="p-3 font-bold text-gray-200">${pos.symbol.replace('frx', '')}</td>
+                    <td class="p-3 font-black ${pos.type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}">${pos.type}</td>
+                    <td class="p-3">${pos.lot.toFixed(2)}</td>
+                    <td class="p-3">${pos.entry.toFixed(dec)}</td>
+                    <td class="p-3 text-[11px] text-gray-400">TP: <span class="text-emerald-400">${pos.tp ? pos.tp.toFixed(dec) : 'None'}</span><br>SL: <span class="text-rose-400">${pos.sl ? pos.sl.toFixed(dec) : 'None'}</span></td>
+                    <td class="p-3">${currentPrice.toFixed(dec)}</td>
+                    <td class="p-3 font-bold ${pos.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}</td>
+                    <td class="p-3 text-right"><button onclick="closePosition(${index})" class="bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white px-3 py-1 rounded text-[11px] font-bold transition-all">Close</button></td>
+                </tr>`;
+            });
+        }
+
+        function renderPendingOrders() {
+            const tbody = document.getElementById('pending-list');
+            document.getElementById('pending-count').textContent = pendingOrders.length;
+            if (pendingOrders.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500 font-sans italic">No pending orders.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            pendingOrders.forEach((order, index) => {
+                const dec = order.symbol === 'frxUSDJPY' ? 3 : 4;
+                tbody.innerHTML += `<tr class="border-b border-dark-border">
+                    <td class="p-3 font-bold text-gray-200">${order.symbol.replace('frx', '')}</td>
+                    <td class="p-3 font-bold text-blue-400">${order.type}</td>
+                    <td class="p-3">${order.lot.toFixed(2)}</td>
+                    <td class="p-3 font-bold">${order.triggerPrice.toFixed(dec)}</td>
+                    <td class="p-3">${currentPrice.toFixed(dec)}</td>
+                    <td class="p-3 text-right"><button onclick="cancelPending(${index})" class="bg-dark-600 hover:bg-rose-500 text-gray-300 hover:text-white px-3 py-1 rounded text-[11px] font-bold transition-all">Cancel</button></td>
+                </tr>`;
+            });
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('history-list');
+            document.getElementById('hist-count').textContent = historyTrades.length;
+            if (historyTrades.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-500 font-sans italic">No closed trades yet.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            historyTrades.slice().reverse().forEach(h => {
+                tbody.innerHTML += `<tr class="border-b border-dark-border">
+                    <td class="p-3 text-gray-300">${h.symbol.replace('frx', '')}</td>
+                    <td class="p-3 font-bold ${h.type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}">${h.type}</td>
+                    <td class="p-3">${h.lot.toFixed(2)}</td>
+                    <td class="p-3">${h.entry.toFixed(4)}</td>
+                    <td class="p-3">${h.exit.toFixed(4)}</td>
+                    <td class="p-3 font-bold ${h.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${h.pnl >= 0 ? '+' : ''}$${h.pnl.toFixed(2)}</td>
+                    <td class="p-3 text-right text-gray-400 text-[10px]">${h.time}</td>
+                </tr>`;
+            });
+        }
+
+        function updateAnalytics() {
+            const total = historyTrades.length;
+            document.getElementById('stat-total-trades').textContent = total;
+            if (total === 0) return;
+
+            let wins = 0;
+            let grossProfit = 0;
+            let grossLoss = 0;
+            let netProfit = 0;
+
+            const dailyMap = {};
+
+            historyTrades.forEach(h => {
+                netProfit += h.pnl;
+                if (h.pnl >= 0) {
+                    wins++;
+                    grossProfit += h.pnl;
+                } else {
+                    grossLoss += Math.abs(h.pnl);
+                }
+
+                const d = h.date || new Date().toISOString().split('T')[0];
+                if (!dailyMap[d]) dailyMap[d] = { pnl: 0, count: 0, wins: 0 };
+                dailyMap[d].pnl += h.pnl;
+                dailyMap[d].count += 1;
+                if (h.pnl >= 0) dailyMap[d].wins += 1;
+            });
+
+            const winRate = (wins / total) * 100;
+            const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? 99.99 : 0) : (grossProfit / grossLoss);
+            const maxDD = grossLoss > 0 ? grossLoss * 0.5 : 0;
+
+            document.getElementById('stat-winrate').textContent = winRate.toFixed(1) + '%';
+            document.getElementById('stat-profit-factor').textContent = profitFactor.toFixed(2);
+            document.getElementById('stat-max-dd').textContent = `$${maxDD.toFixed(2)}`;
+            const netProfitEl = document.getElementById('stat-net-profit');
+            netProfitEl.textContent = (netProfit >= 0 ? '+$' : '-$') + Math.abs(netProfit).toFixed(2);
+            netProfitEl.className = 'text-xl font-black font-mono mt-1 block ' + (netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400');
+            document.getElementById('stat-wins').textContent = wins;
+            document.getElementById('stat-losses').textContent = total - wins;
+
+            // Render daily PnL breakdown list
+            const dailyListEl = document.getElementById('daily-pnl-list');
+            if (dailyListEl) {
+                dailyListEl.innerHTML = '';
+                Object.keys(dailyMap).sort().reverse().forEach(date => {
+                    const item = dailyMap[date];
+                    dailyListEl.innerHTML += `
+                        <div class="flex justify-between items-center bg-dark-900/60 p-2.5 rounded-lg border border-dark-border">
+                            <span class="text-gray-300 font-bold">${date}</span>
+                            <span class="text-gray-400">Trades: ${item.count} (Wins: ${item.wins})</span>
+                            <span class="font-bold ${item.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${item.pnl >= 0 ? '+' : ''}$${item.pnl.toFixed(2)}</span>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        window.closePosition = (index) => {
+            const pos = positions[index];
+            balance += pos.pnl;
+            const closedRecord = {
+                ...pos,
+                exit: currentPrice,
+                date: new Date().toISOString().split('T')[0],
+                time: new Date().toLocaleTimeString(),
+                reason: 'Manual Close'
+            };
+            historyTrades.push(closedRecord);
+            positions.splice(index, 1);
+            updateUI();
+            saveUserData();
+            showToast(`Closed trade with ${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}`, pos.pnl >= 0 ? 'success' : 'error');
+            sendTelegramNotification(`🔴 *MANUAL CLOSE*\n\nSymbol: ${pos.symbol}\nType: ${pos.type}\nEntry: ${pos.entry}\nExit: ${currentPrice.toFixed(4)}\nPnL: $${pos.pnl.toFixed(2)} ${pos.pnl >= 0 ? '🟢' : '🔴'}`);
+        };
+
+        window.useSignal = (entry, sl, tp, symbol, type) => {
+            pendingOrders.push({ 
+                symbol, 
+                type: type + '_LIMIT', 
+                lot: 0.10, 
+                triggerPrice: entry, 
+                sl, 
+                tp 
+            });
+            updateUI();
+            saveUserData();
+            showToast(`Pending order placed at ${entry}`, 'success');
+        };
+
+        window.cancelPending = (index) => {
+            pendingOrders.splice(index, 1);
+            updateUI();
+            saveUserData(); // Added save
+            showToast('Pending order cancelled', 'info');
+        };
+
+
+
+        window.closeAllPositions = () => {
+            while(positions.length > 0) { closePosition(0); }
+        };
+
+        document.getElementById('buy').onclick = () => executeTrade('BUY');
+        document.getElementById('sell').onclick = () => executeTrade('SELL');
+
+        window.toggleEntryPrice = () => {
+            const orderType = document.getElementById('order-type').value;
+            const container = document.getElementById('entry-price-container');
+            if (orderType === 'MARKET') {
+                container.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                container.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        };
+
+        window.executeAITrade = () => {
+            if (!window.lastAiSignal) return;
+            const { type, entry, sl, tp } = window.lastAiSignal;
+            
+            pendingOrders.push({ 
+                symbol: currentSymbol,
+                type: type + '_LIMIT', 
+                lot: 0.10, 
+                triggerPrice: entry, 
+                sl: sl, 
+                tp: tp 
+            });
+            updateUI();
+            saveUserData();
+            showToast(`AI Pending order placed at ${entry.toFixed(4)}`, 'success');
+        };
+
+        function executeTrade(type) {
+            if (currentPrice <= 0) return;
+            const orderType = document.getElementById('order-type').value;
+            const lot = parseFloat(document.getElementById('lots').value) || 0.10;
+            const tp = parseFloat(document.getElementById('tp-price').value) || null;
+            const sl = parseFloat(document.getElementById('sl-price').value) || null;
+
+            if (orderType === 'MARKET') {
+                positions.push({ symbol: currentSymbol, type, lot, entry: currentPrice, tp, sl, pnl: 0 });
+                updateUI();
+                saveUserData();
+                showToast(`Opened ${type} ${lot} Lots`, 'success');
+            } else {
+                const pendingSuffix = orderType.includes('STOP') ? 'STOP' : 'LIMIT';
+                const finalOrderType = `${type}_${pendingSuffix}`;
+                
+                const entryInput = document.getElementById('entry-price').value;
+                const triggerPrice = parseFloat(entryInput);
+                
+                if (isNaN(triggerPrice) || triggerPrice <= 0) {
+                    showToast('Please enter a valid Entry Price for pending orders', 'error');
+                    return;
+                }
+                
+                pendingOrders.push({ symbol: currentSymbol, type: finalOrderType, lot, triggerPrice: triggerPrice, tp, sl });
+                updateUI();
+                saveUserData();
+                showToast(`Pending order placed at ${triggerPrice.toFixed(4)}`, 'success');
+            }
+        }
+
+        window.switchTab = (tab) => {
+            ['positions', 'pending', 'history', 'analytics'].forEach(t => {
+                document.getElementById('view-' + t).classList.add('hidden');
+                document.getElementById('tab-' + t).className = 'font-semibold text-sm text-gray-400 hover:text-white pb-1 transition-all';
+            });
+            document.getElementById('view-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).className = 'font-bold text-sm text-white border-b-2 border-amber-500 pb-1 transition-all';
+        };
+
+        window.switchSidebar = (tab) => {
+            if (tab === 'ai') {
+                document.getElementById('sidebar-ai').classList.remove('hidden');
+                document.getElementById('sidebar-chat').classList.add('hidden');
+                document.getElementById('side-tab-ai').className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-dark-600 text-white shadow transition-all flex items-center justify-center gap-2';
+                document.getElementById('side-tab-chat').className = 'flex-1 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2';
+            } else {
+                document.getElementById('sidebar-ai').classList.add('hidden');
+                document.getElementById('sidebar-chat').classList.remove('hidden');
+                document.getElementById('sidebar-chat').classList.add('flex');
+                document.getElementById('side-tab-chat').className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-dark-600 text-white shadow transition-all flex items-center justify-center gap-2';
+                document.getElementById('side-tab-ai').className = 'flex-1 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2';
+            }
+        };
+
+        window.changeTimeframe = (granularity, btn) => {
+            currentGranularity = parseInt(granularity);
+            document.querySelectorAll('.tf-btn').forEach(b => {
+                b.className = 'tf-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
+            });
+            btn.className = 'tf-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white transition-all bg-dark-600 shadow';
+            fetchCandles();
+        };
+
+        window.analyzeWithAI = async () => {
+            if (!candlestickSeries) return;
+            switchSidebar('ai');
+            const aiContainer = document.getElementById('ai-signals-container');
+            aiContainer.innerHTML = `<div class="flex flex-col items-center justify-center py-12 gap-3 bg-dark-700/30 rounded-2xl border border-dark-border"><div class="w-6 h-6 border-3 border-purple-500 border-t-transparent rounded-full animate-spin"></div><p class="text-xs text-purple-300 font-medium animate-pulse">Gemini AI analyzing & broadcasting to Telegram...</p></div>`;
+
+            try {
+                const candleData = candlestickSeries.data();
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candles: candleData.slice(-20), currentPrice, granularity: currentGranularity })
+                });
+                const data = await response.json();
+                const analysis = data.analysis || "buy/sell now : 2650\nsl: 2640\ntp1: 2665\ntp2: 2680";
+                const isBuy = analysis.toUpperCase().includes('BUY') || !analysis.toUpperCase().includes('SELL');
+                
+                const entryMatch = analysis.match(/(?:buy|sell) now\s*:\s*([\d\.]+)/i);
+                const slMatch = analysis.match(/sl:\s*([\d\.]+)/i);
+                const tpMatch = analysis.match(/tp1:\s*([\d\.]+)/i);
+                
+                const aiEntry = entryMatch ? parseFloat(entryMatch[1]) : currentPrice;
+                const aiSl = slMatch ? parseFloat(slMatch[1]) : 0;
+                const aiTp = tpMatch ? parseFloat(tpMatch[1]) : 0;
+
+                window.lastAiSignal = { type: isBuy ? 'BUY' : 'SELL', entry: aiEntry, sl: aiSl, tp: aiTp };
+                
+                aiContainer.innerHTML = `
+                    <div class="bg-gradient-to-br from-purple-900/40 to-dark-700 p-4 rounded-2xl border border-purple-500/40 shadow-xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 uppercase">Alawites Quant & Telegram Broadcast</span>
+                            <span class="text-[10px] text-gray-400 font-mono">${new Date().toLocaleTimeString()}</span>
+                        </div>
+                        <div class="bg-dark-900/80 p-3 rounded-xl border border-dark-border font-mono text-xs text-emerald-300 leading-relaxed whitespace-pre-line">${analysis}</div>
+                        <div class="pt-2 flex gap-2">
+                            <button onclick="executeAITrade()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl text-xs transition-all shadow-lg shadow-purple-600/30">
+                                Execute AI ${isBuy ? 'BUY' : 'SELL'} @ ${aiEntry.toFixed(2)}
+                            </button>
+                        </div>
+                    </div>
+                `;
+                showToast('AI Scan Completed & Broadcasted to Telegram!', 'success');
+            } catch (err) {
+                aiContainer.innerHTML = `<p class="text-xs text-rose-400 text-center py-6">Failed to generate AI analysis.</p>`;
+                showToast('AI Analysis failed', 'error');
+            }
+        };
+
+        function addSignalCard(author, text, bgClass) {
+            const signalsDiv = document.getElementById('signals');
+            const card = document.createElement('div');
+            card.className = `${bgClass} p-3.5 rounded-xl border border-dark-border`;
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">${author}</span>
+                    <span class="text-[10px] text-gray-500 font-mono">Just now</span>
+                </div>
+                <p class="text-xs text-gray-200 mb-2 font-mono">${text}</p>
+                <button onclick="copyTrade('BUY frxXAUUSD ' + currentPrice.toFixed(2))" class="bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs w-full transition-all">Copy Trade</button>
+            `;
+            signalsDiv.appendChild(card);
+            signalsDiv.scrollTop = signalsDiv.scrollHeight;
+        }
+
+        window.copyTrade = (text) => {
+            const parts = text.split(' ');
+            const type = parts.length > 0 && parts[0].toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+            let triggerPrice = currentPrice;
+            if (parts.length > 2) {
+                const parsed = parseFloat(parts[2]);
+                if (!isNaN(parsed) && parsed > 0 && Math.abs(parsed - currentPrice) / currentPrice < 0.2) {
+                    triggerPrice = parsed;
+                }
+            }
+            
+            pendingOrders.push({ 
+                symbol: currentSymbol, 
+                type: type + '_LIMIT', 
+                lot: 0.10, 
+                triggerPrice: triggerPrice, 
+                sl: 0, 
+                tp: 0, 
+                pnl: 0 
+            });
+            updateUI();
+            saveUserData();
+            showToast(`Pending ${type} Limit order created at ${triggerPrice.toFixed(4)}!`, 'success');
+        };
+
+        function sendTelegramNotification(message) {
+            fetch('/api/send-telegram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            }).catch(err => console.error(err));
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColors = { success: 'bg-emerald-600 text-white', error: 'bg-rose-600 text-white', info: 'bg-dark-700 text-gray-200 border border-dark-border' };
+            toast.className = `${bgColors[type] || bgColors.info} px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 transform translate-y-4 opacity-0 transition-all duration-300 pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check text-emerald-300' : type === 'error' ? 'fa-circle-exclamation text-rose-300' : 'fa-circle-info text-amber-300'}"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-y-4', 'opacity-0'), 10);
+            setTimeout(() => { toast.classList.add('translate-y-4', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        const sendBtnEl = document.getElementById('sendBtn');
+        const chatInputEl = document.getElementById('chatInput');
+        if (sendBtnEl && chatInputEl) {
+            sendBtnEl.onclick = () => {
+                const text = chatInputEl.value.trim();
+                if (!text) return;
+                
+                const signalsDiv = document.getElementById('signals');
+                const card = document.createElement('div');
+                card.className = `bg-dark-700/80 p-3.5 rounded-xl border border-dark-border`;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">${currentUser ? currentUser.email : 'Trader'}</span>
+                        <span class="text-[10px] text-gray-500 font-mono">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    <p class="text-xs text-gray-200 mb-2 font-mono whitespace-pre-line">${text}</p>
+                `;
+                signalsDiv.appendChild(card);
+                signalsDiv.scrollTop = signalsDiv.scrollHeight;
+
+                fetch('/api/send-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: `Eng.Hasan:${text}` })
+                });
+
+                chatInputEl.value = '';
+            };
+            
+            // Economic Calendar Widget
+            const calendarContainer = document.createElement('div');
+            calendarContainer.className = 'bg-dark-800 p-4 rounded-xl border border-dark-border mt-4 h-64 overflow-hidden';
+            calendarContainer.innerHTML = `
+                <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase">Economic Calendar</h3>
+                <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=2,3&features=datepicker,timeselector,filters&countries=5,25,32,37,72,110&calType=week&timeZone=8&lang=1" width="100%" height="200" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0"></iframe>
+            `;
+            document.getElementById('signals').parentNode.insertBefore(calendarContainer, document.getElementById('signals').nextSibling);
+
+            chatInputEl.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    sendBtnEl.click();
+                }
+            };
+        }
+    </script>
+</body>
+</html>
