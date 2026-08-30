@@ -1,7 +1,16 @@
 import WebSocket from 'ws';
-import { EMA, RSI, ADX, MACD, BollingerBands, ATR } from 'technicalindicators';
+import { GoogleGenAI, Type } from '@google/genai';
 import { checkUpcomingHighImpactNews } from './news.ts';
 import { store } from './store.ts';
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 const DERIV_APP_ID = 1089;
 
@@ -145,87 +154,114 @@ export class TradingEngine {
     }
 
     private async analyzePair(symbol: string): Promise<TradeSetup | null> {
-        // 1. Fetch 4H Context
-        const h4Candles = await this.fetchKlines(symbol, 14400, 150);
-        if (h4Candles.length < 50) return null;
+        // Fetch last 30 candles on 15m timeframe for precision analysis
+        const m15Candles = await this.fetchKlines(symbol, 900, 30);
+        if (m15Candles.length < 30) return null;
         
-        const h4Highs = h4Candles.map(c => c.high);
-        const h4Lows = h4Candles.map(c => c.low);
-        const h4Closes = h4Candles.map(c => c.close);
+        const currentPrice = m15Candles[m15Candles.length - 1].close;
 
-        const adxResult = ADX.calculate({ high: h4Highs, low: h4Lows, close: h4Closes, period: 14 });
-        const lastAdx = adxResult[adxResult.length - 1];
-        
-        const ema50 = EMA.calculate({ period: 50, values: h4Closes });
-        const ema200 = EMA.calculate({ period: 200, values: h4Closes });
-        const lastEma50 = ema50[ema50.length - 1];
-        const lastEma200 = ema200[ema200.length - 1];
+        // Format candles for Gemini
+        const candlesData = m15Candles.map((c, i) => 
+            `Candle ${i+1}: Open=${c.open}, High=${c.high}, Low=${c.low}, Close=${c.close}`
+        ).join('\n');
 
-        // Market Context Detection
-        let context: 'TREND_UP' | 'TREND_DOWN' | 'RANGING' = 'RANGING';
-        if (lastAdx.adx > 25) {
-            if (lastEma50 > lastEma200) context = 'TREND_UP';
-            else if (lastEma50 < lastEma200) context = 'TREND_DOWN';
-        }
+        const prompt = `
+أنت متداول محترف في الفوركس و محلل فني خبير يدمج بين مدارس متعددة (Price Action, Smart Money Concepts, ICT, العرض والطلب, والمؤشرات الفنية).
+يجب عليك تحليل آخر 30 شمعة (فريم 15 دقيقة) للزوج: ${symbol}
 
-        // 2. Fetch 15m for precision entry
-        const m15Candles = await this.fetchKlines(symbol, 900, 100);
-        const m15Highs = m15Candles.map(c => c.high);
-        const m15Lows = m15Candles.map(c => c.low);
-        const m15Closes = m15Candles.map(c => c.close);
-        const currentPrice = m15Closes[m15Closes.length - 1];
+بيانات الشموع:
+${candlesData}
 
-        // Use ATR for dynamic Volatility-based Stop Loss & Take Profit (Guarantee 1:2 R:R)
-        const atrResult = ATR.calculate({ high: m15Highs, low: m15Lows, close: m15Closes, period: 14 });
-        const currentAtr = atrResult[atrResult.length - 1];
+المطلوب:
+1. قم بتحليل الاتجاه العام وهيكل السوق (Market Structure).
+2. حدد ما إذا كان هناك فرصة تداول قوية (Long أو Short) أو إذا كان الأفضل البقاء خارج السوق (No Trade).
+3. **شرط صارم جداً:** يجب أن تكون نسبة العائد إلى المخاطرة (Reward to Risk Ratio) لا تقل عن 1:2 أو أعلى. (أي أن المسافة من نقطة الدخول إلى الهدف يجب أن تكون ضعف المسافة من نقطة الدخول إلى وقف الخسارة على الأقل).
+4. اذكر سبب الدخول بوضوح وبشكل مقنع يشرح المدرسة الفنية المستخدمة.
 
-        let signal: TradeSetup | null = null;
+قم بإرجاع النتيجة بصيغة JSON فقط متوافقة مع هذا الهيكل:
+`;
 
-        if (context === 'TREND_UP' || context === 'TREND_DOWN') {
-            // Strategy: Trend Following (MACD Momentum + Trend Alignment)
-            const macdResult = MACD.calculate({ values: m15Closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false });
-            const lastMacd = macdResult[macdResult.length - 1];
+        try {
+            const response = await ai.models.generateContent({
+                model: "gemini-3.1-pro-preview",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            hasTrade: {
+                                type: Type.BOOLEAN,
+                                description: "هل توجد فرصة تداول قوية تلبي جميع الشروط؟"
+                            },
+                            type: {
+                                type: Type.STRING,
+                                description: "LONG أو SHORT (فقط في حال وجود فرصة)"
+                            },
+                            entryPrice: {
+                                type: Type.NUMBER,
+                                description: "سعر الدخول المقترح"
+                            },
+                            stopLoss: {
+                                type: Type.NUMBER,
+                                description: "سعر وقف الخسارة"
+                            },
+                            takeProfit: {
+                                type: Type.NUMBER,
+                                description: "سعر أخذ الربح (يجب أن يحقق R:R 1:2 على الأقل)"
+                            },
+                            reason: {
+                                type: Type.STRING,
+                                description: "سبب الدخول باختصار مع ذكر المدرسة الفنية المستخدمة باللغة العربية"
+                            }
+                        },
+                        required: ["hasTrade", "reason"]
+                    },
+                    temperature: 0.2, // Low temperature for more analytical/consistent logic
+                }
+            });
 
-            if (context === 'TREND_UP' && lastMacd.MACD! > lastMacd.signal!) {
-                signal = {
-                    symbol, type: 'LONG', entryPrice: currentPrice,
-                    stopLoss: currentPrice - (1.5 * currentAtr),
-                    takeProfit: currentPrice + (3.0 * currentAtr), // 1:2 R:R
-                    reason: 'السوق في ترند صاعد قوي (ADX>25) 📈 + تأكيد الزخم الشرائي بتقاطع MACD إيجابي.'
-                };
-            } else if (context === 'TREND_DOWN' && lastMacd.MACD! < lastMacd.signal!) {
-                signal = {
-                    symbol, type: 'SHORT', entryPrice: currentPrice,
-                    stopLoss: currentPrice + (1.5 * currentAtr),
-                    takeProfit: currentPrice - (3.0 * currentAtr), // 1:2 R:R
-                    reason: 'السوق في ترند هابط قوي (ADX>25) 📉 + تأكيد الزخم البيعي بتقاطع MACD سلبي.'
-                };
+            if (!response.text) return null;
+
+            const aiAnalysis = JSON.parse(response.text.trim());
+
+            if (!aiAnalysis.hasTrade) {
+                return null; // No setup identified by Gemini
             }
-        } else {
-            // Strategy: Range Bound / Mean Reversion (Bollinger Bands Fade + RSI Overbought/Oversold)
-            const bbResult = BollingerBands.calculate({ period: 20, values: m15Closes, stdDev: 2 });
-            const rsiResult = RSI.calculate({ period: 14, values: m15Closes });
-            const lastBb = bbResult[bbResult.length - 1];
-            const lastRsi = rsiResult[rsiResult.length - 1];
 
-            if (currentPrice <= lastBb.lower && lastRsi < 35) {
-                signal = {
-                    symbol, type: 'LONG', entryPrice: currentPrice,
-                    stopLoss: currentPrice - (1 * currentAtr),
-                    takeProfit: currentPrice + (2 * currentAtr), // 1:2 R:R
-                    reason: 'السوق في مسار عرضي (ADX<25) ↔️ + ارتداد من قاع البولينجر باند + تشبع بيعي RSI (مدرسة العودة للمتوسط).'
-                };
-            } else if (currentPrice >= lastBb.upper && lastRsi > 65) {
-                signal = {
-                    symbol, type: 'SHORT', entryPrice: currentPrice,
-                    stopLoss: currentPrice + (1 * currentAtr),
-                    takeProfit: currentPrice - (2 * currentAtr), // 1:2 R:R
-                    reason: 'السوق في مسار عرضي (ADX<25) ↔️ + ارتداد من قمة البولينجر باند + تشبع شرائي RSI (مدرسة العودة للمتوسط).'
-                };
+            // Fallback safety check: verify R:R ratio programmatically
+            const entry = aiAnalysis.entryPrice;
+            const sl = aiAnalysis.stopLoss;
+            const tp = aiAnalysis.takeProfit;
+
+            if (!entry || !sl || !tp) return null;
+
+            const risk = Math.abs(entry - sl);
+            const reward = Math.abs(tp - entry);
+
+            if (risk === 0 || reward / risk < 1.9) {
+                // R:R is less than ~2, reject this setup
+                console.log(`[Gemini] Rejected ${symbol} trade due to bad R:R. Risk: ${risk}, Reward: ${reward}`);
+                return null;
             }
-        }
+            
+            // Ensure logic matches LONG/SHORT
+            if (aiAnalysis.type === 'LONG' && tp < entry) return null;
+            if (aiAnalysis.type === 'SHORT' && tp > entry) return null;
 
-        return signal;
+            return {
+                symbol,
+                type: aiAnalysis.type as 'LONG' | 'SHORT',
+                entryPrice: currentPrice, // Execute at current market price
+                stopLoss: sl,
+                takeProfit: tp,
+                reason: `🤖 (تحليل الذكاء الاصطناعي - Gemini):\n` + aiAnalysis.reason
+            };
+
+        } catch (error) {
+            console.error("Gemini Analysis Error:", error);
+            return null;
+        }
     }
 
     private executeTrade(trade: TradeSetup) {
