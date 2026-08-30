@@ -126,6 +126,12 @@ if (bot) {
         ctx.reply(historyMsg, { parse_mode: 'HTML' });
     });
 
+    bot.command('status', (ctx) => {
+        if (!store.isAdmin(ctx.from.username)) return;
+        const statusMsg = engine.getStatus();
+        ctx.reply(statusMsg, { parse_mode: 'HTML' });
+    });
+
     // Handle gracefully
     process.once('SIGINT', () => bot.stop('SIGINT'));
     process.once('SIGTERM', () => bot.stop('SIGTERM'));

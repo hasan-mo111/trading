@@ -32,6 +32,8 @@ export class TradingEngine {
     private scanInterval: NodeJS.Timeout | null = null;
     private monitorWs: WebSocket | null = null;
     private activeTrades = new Map<string, TradeSetup>();
+    private lastScanTime: Date | null = null;
+    private scanCount: number = 0;
     
     private onMessageCb: (msg: string) => void;
     private onBroadcastCb: (msg: string) => void;
@@ -39,6 +41,26 @@ export class TradingEngine {
     constructor(onMessage: (msg: string) => void, onBroadcast: (msg: string) => void) {
         this.onMessageCb = onMessage;
         this.onBroadcastCb = onBroadcast;
+    }
+
+    public getStatus(): string {
+        if (!this.isScanning) {
+            return '⚪ الرادار متوقف حالياً. (استخدم /analyze للتشغيل)';
+        }
+        
+        const activeCount = this.activeTrades.size;
+        const scanTimeStr = this.lastScanTime ? this.lastScanTime.toLocaleTimeString('ar-EG', { timeZone: 'Asia/Riyadh' }) : 'لم يتم المسح بعد';
+        
+        let statusMsg = `🟢 <b>حالة الرادار: نشط</b>\n\n`;
+        statusMsg += `🔄 عدد دورات المسح المكتملة: ${this.scanCount}\n`;
+        statusMsg += `⏱️ آخر مسح تم في: ${scanTimeStr} (بتوقيت السعودية)\n`;
+        statusMsg += `📈 الصفقات المفتوحة حالياً: ${activeCount}\n`;
+        
+        if (activeCount > 0) {
+            statusMsg += `\nالأزواج النشطة: ` + Array.from(this.activeTrades.keys()).join(', ');
+        }
+        
+        return statusMsg;
     }
 
     public async startAnalysis(symbol: string) {
@@ -63,6 +85,7 @@ export class TradingEngine {
     }
 
     private async scanPairs(pairs: string[]) {
+        let newTrades = 0;
         for (const sym of pairs) {
             if (this.activeTrades.has(sym)) continue; // Skip if already have an active trade for this pair
 
@@ -71,10 +94,18 @@ export class TradingEngine {
                 const signal = await this.analyzePair(sym);
                 if (signal) {
                     this.executeTrade(signal);
+                    newTrades++;
                 }
             } catch (err) {
                 console.error(`Error scanning ${sym}:`, err);
             }
+        }
+        
+        this.lastScanTime = new Date();
+        this.scanCount++;
+
+        if (this.scanCount === 1 && newTrades === 0) {
+            this.onMessageCb('✅ اكتملت دورة المسح الأولى!\nلم يتم العثور على فرص تطابق الشروط الصارمة حالياً.\nالرادار مستمر في الخلفية (كل 15 دقيقة) وسيعلمك فور التقاط فرصة ذهبية.');
         }
     }
 
