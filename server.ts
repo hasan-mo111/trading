@@ -27,7 +27,10 @@ app.listen(PORT, () => {
     
     // Initialize Bot
     if (bot) {
-        bot.launch().then(() => console.log('🤖 Telegram Bot is online and listening.'));
+        bot.launch().then(() => console.log('🤖 Telegram Bot is online and listening.'))
+           .catch((err) => {
+               console.error('⚠️ Could not start Telegram Bot. It may be running on another instance (e.g., Render).', err.message);
+           });
     } else {
         console.log('⚠️ Telegram Bot Token not provided, bot is offline. Set TELEGRAM_BOT_TOKEN.');
     }
