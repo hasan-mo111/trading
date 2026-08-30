@@ -1,8 +1,9 @@
-import axios from 'axios';
 import WebSocket from 'ws';
 import { EMA, RSI } from 'technicalindicators';
 import { checkUpcomingHighImpactNews } from './news.ts';
 import { store } from './store.ts';
+
+const DERIV_APP_ID = 1089;
 
 type TradeState = 'IDLE' | 'SCANNING_TREND' | 'SNIPING_ENTRY' | 'MONITORING_TRADE';
 
@@ -16,11 +17,9 @@ interface SignalConfig {
     type?: 'LONG' | 'SHORT';
 }
 
-// We will use Binance API for demonstration as it has free reliable WebSockets for both Crypto and simulated assets.
-// For Gold (XAUUSD), a broker API (like OANDA/MetaTrader) would be needed, but the logic remains identical.
 export class TradingEngine {
     private state: SignalConfig = {
-        symbol: 'BTCUSDT',
+        symbol: 'frxXAUUSD',
         state: 'IDLE',
         trend: 'NONE',
         entryPrice: 0,
@@ -43,24 +42,55 @@ export class TradingEngine {
             return;
         }
 
-        this.state.symbol = symbol.toUpperCase();
+        // Handle generic XAUUSD to Deriv's specific frxXAUUSD format
+        if (symbol.toUpperCase() === 'XAUUSD' || symbol === '') {
+            this.state.symbol = 'frxXAUUSD';
+        } else {
+            this.state.symbol = symbol;
+        }
+
         this.state.state = 'SCANNING_TREND';
-        this.onMessageCb(`🔍 تم بدء التحليل لزوج ${this.state.symbol}...\n\nالخطوة 1: مراقبة الاتجاه العام على فريم 4 ساعات.`);
+        this.onMessageCb(`🔍 تم بدء التحليل لزوج ${this.state.symbol} عبر مزود بيانات Deriv...\n\nالخطوة 1: مراقبة الاتجاه العام على فريم 4 ساعات.`);
 
         await this.analyzeTrend();
     }
 
-    private async fetchKlines(symbol: string, interval: string, limit: number = 250) {
-        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-        const response = await axios.get(url);
-        const closes = response.data.map((d: any[]) => parseFloat(d[4]));
-        return closes;
+    private async fetchKlines(symbol: string, granularity: number, limit: number = 250): Promise<number[]> {
+        return new Promise((resolve, reject) => {
+            const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`);
+            
+            ws.on('open', () => {
+                ws.send(JSON.stringify({
+                    ticks_history: symbol,
+                    adjust_start_time: 1,
+                    count: limit,
+                    end: "latest",
+                    style: "candles",
+                    granularity: granularity // Timeframe in seconds
+                }));
+            });
+
+            ws.on('message', (data: string) => {
+                const response = JSON.parse(data);
+                if (response.error) {
+                    reject(new Error(response.error.message));
+                } else if (response.candles) {
+                    const closes = response.candles.map((c: any) => parseFloat(c.close));
+                    resolve(closes);
+                }
+                ws.close();
+            });
+
+            ws.on('error', (err) => {
+                reject(err);
+            });
+        });
     }
 
     private async analyzeTrend() {
         try {
-            // Fetch 4H data for trend direction
-            const closes = await this.fetchKlines(this.state.symbol, '4h', 250);
+            // Fetch 4H data for trend direction (4 hours = 14400 seconds)
+            const closes = await this.fetchKlines(this.state.symbol, 14400, 250);
             
             // Calculate EMA 50 and 200
             const ema50 = EMA.calculate({ period: 50, values: closes });
@@ -85,7 +115,7 @@ export class TradingEngine {
             }
         } catch (error) {
             this.state.state = 'IDLE';
-            this.onMessageCb(`❌ حدث خطأ أثناء تحليل الاتجاه: ${(error as Error).message}`);
+            this.onMessageCb(`❌ حدث خطأ أثناء تحليل الاتجاه (Deriv API): ${(error as Error).message}`);
         }
     }
 
@@ -103,7 +133,8 @@ export class TradingEngine {
             }
 
             try {
-                const closes = await this.fetchKlines(this.state.symbol, '15m', 50);
+                // 15 minutes = 900 seconds
+                const closes = await this.fetchKlines(this.state.symbol, 900, 50);
                 const rsiValues = RSI.calculate({ period: 14, values: closes });
                 const lastRsi = rsiValues[rsiValues.length - 1];
                 const currentPrice = closes[closes.length - 1];
@@ -170,17 +201,32 @@ export class TradingEngine {
     }
 
     private async startMonitoring() {
-        // Connect to WS for live price monitoring
-        const wsUrl = `wss://stream.binance.com:9443/ws/${this.state.symbol.toLowerCase()}@ticker`;
+        // Connect to Deriv WS for live price monitoring
+        const wsUrl = `wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`;
         this.ws = new WebSocket(wsUrl);
 
         let lastNewsCheck = 0;
 
+        this.ws.on('open', () => {
+            // Subscribe to live ticks
+            this.ws?.send(JSON.stringify({
+                ticks: this.state.symbol,
+                subscribe: 1
+            }));
+        });
+
         this.ws.on('message', async (data: string) => {
             if (this.state.state !== 'MONITORING_TRADE') return;
 
-            const ticker = JSON.parse(data);
-            const currentPrice = parseFloat(ticker.c);
+            const response = JSON.parse(data);
+            if (response.error) {
+                console.error("Deriv WS Error:", response.error.message);
+                return;
+            }
+
+            if (!response.tick) return; // Ignore non-tick messages
+
+            const currentPrice = parseFloat(response.tick.quote);
 
             // 1. Check TP / SL
             if (this.state.trend === 'UP') {
