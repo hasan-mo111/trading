@@ -99,7 +99,7 @@ export class TradingEngine {
             if (this.activeTrades.has(sym)) continue; // Skip if already have an active trade for this pair
 
             try {
-                await new Promise(res => setTimeout(res, 1000)); // Delay between pairs to avoid rate limits
+                await new Promise(res => setTimeout(res, 6000)); // تأخير 6 ثواني لتفادي حظر الطلبات السريعة (429 Rate Limits)
                 const signal = await this.analyzePair(sym);
                 if (signal) {
                     this.executeTrade(signal);
@@ -183,7 +183,7 @@ ${candlesData}
 
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-3.1-pro-preview",
+                model: "gemini-2.5-flash",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
