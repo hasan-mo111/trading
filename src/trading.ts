@@ -34,6 +34,8 @@ export interface TradeSetup {
     takeProfit: number;
     stopLoss: number;
     reason: string;
+    currentPrice?: number;
+    currentPnLPercent?: string;
 }
 
 export class TradingEngine {
@@ -106,7 +108,7 @@ export class TradingEngine {
             if (this.activeTrades.has(sym)) continue; // Skip if already have an active trade for this pair
 
             try {
-                await new Promise(res => setTimeout(res, 6000)); // تأخير 6 ثواني لتفادي حظر الطلبات السريعة (429 Rate Limits)
+                await new Promise(res => setTimeout(res, 8000)); // تأخير 8 ثواني لتفادي حظر الطلبات
                 const signal = await this.analyzePair(sym);
                 if (signal) {
                     this.executeTrade(signal);
@@ -190,7 +192,7 @@ ${candlesData}
 
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-3.6-flash",
+                model: "gemini-3.7-flash",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -324,6 +326,23 @@ ${candlesData}
             const trade = this.activeTrades.get(symbol);
             if (!trade) return;
 
+            // Update current price and PnL
+            trade.currentPrice = currentPrice;
+            const slDistance = Math.abs(trade.entryPrice - trade.stopLoss);
+            const priceMove = trade.type === 'LONG' ? (currentPrice - trade.entryPrice) : (trade.entryPrice - currentPrice);
+            
+            if (slDistance > 0) {
+                const riskPercent = 1.0; // 1% account risk per trade
+                const rMultiple = priceMove / slDistance;
+                const profitPercent = rMultiple * riskPercent;
+                // If 1% risk means -100% loss in user terms, we should format it as rMultiple * 100
+                // User asked for: "100% loss closes the trade, 200% profit means tp"
+                // So the percentage is just rMultiple * 100
+                trade.currentPnLPercent = (rMultiple * 100).toFixed(2);
+            } else {
+                trade.currentPnLPercent = '0.00';
+            }
+
             // Check TP / SL
             if (trade.type === 'LONG') {
                 if (currentPrice >= trade.takeProfit) this.closeTrade(trade, currentPrice, 'TAKE_PROFIT');
@@ -371,9 +390,8 @@ ${candlesData}
         
         let profitPercentStr = '0.00';
         if (slDistance > 0) {
-            const riskPercent = 1.0; // 1% account risk per trade
             const rMultiple = priceMove / slDistance;
-            const profitPercent = rMultiple * riskPercent;
+            const profitPercent = rMultiple * 100; // Users want 100% loss for SL, 200% for TP (Risk-based %)
             profitPercentStr = profitPercent.toFixed(2);
         }
         
