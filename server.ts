@@ -1,7 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
-import { bot } from './src/bot.ts';
+import { bot, engine } from './src/bot.ts';
+import { store } from './src/store.ts';
 
 dotenv.config();
 
@@ -15,6 +16,36 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // Basic route to check if server is running
 app.get('/api/health', (req, res) => {
     res.json({ status: 'active', message: 'Trading Backend is running successfully.' });
+});
+
+app.get('/api/stats', (req, res) => {
+    const activeTrades = engine.getActiveTrades();
+    const trades = store.getTrades();
+    
+    // Filter out only CLOSED trades since activeTrades handles OPEN
+    const closedTrades = trades.filter((t: any) => t.status === 'CLOSED');
+    
+    let totalProfitPercent = 0;
+    let dailyProfitPercent = 0;
+    
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    
+    closedTrades.forEach((t: any) => {
+        const profit = parseFloat(t.profitPercent) || 0;
+        totalProfitPercent += profit;
+        
+        if (now - t.timestamp <= oneDay) {
+            dailyProfitPercent += profit;
+        }
+    });
+
+    res.json({
+        activeTrades,
+        closedTrades,
+        totalProfitPercent: totalProfitPercent.toFixed(2),
+        dailyProfitPercent: dailyProfitPercent.toFixed(2)
+    });
 });
 
 // Basic route to serve the trading page (keep it available just in case)

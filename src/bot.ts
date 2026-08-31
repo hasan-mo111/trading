@@ -12,6 +12,23 @@ if (!token) {
 
 export const bot = token ? new Telegraf(token) : null;
 
+export const engine = new TradingEngine(
+    (msg) => {
+        if (!bot) return;
+        const users = store.getAllUsers();
+        users.forEach(chatId => {
+            bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(e => console.error(`Failed to send to ${chatId}`, e));
+        });
+    },
+    (msg) => {
+        if (!bot) return;
+        const users = store.getAllUsers();
+        users.forEach(chatId => {
+            bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(e => console.error(`Failed to send to ${chatId}`, e));
+        });
+    }
+);
+
 if (bot) {
     // Engine callbacks for messaging
     const sendToAdmin = (msg: string) => {
@@ -25,11 +42,6 @@ if (bot) {
             bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' }).catch(e => console.error(`Failed to send to ${chatId}`, e));
         });
     };
-
-    const engine = new TradingEngine(
-        (msg) => broadcastToUsers(msg), // Forward engine system msgs to users/admins
-        (msg) => broadcastToUsers(msg)  // Broadcast signals
-    );
 
     bot.command('start', (ctx) => {
         store.addUser(ctx.chat.id);

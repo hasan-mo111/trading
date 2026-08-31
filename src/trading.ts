@@ -44,8 +44,11 @@ export class TradingEngine {
     private lastScanTime: Date | null = null;
     private scanCount: number = 0;
     
+    private monitorInterval: NodeJS.Timeout | null = null;
+    
     private onMessageCb: (msg: string) => void;
     private onBroadcastCb: (msg: string) => void;
+
 
     constructor(onMessage: (msg: string) => void, onBroadcast: (msg: string) => void) {
         this.onMessageCb = onMessage;
@@ -70,6 +73,10 @@ export class TradingEngine {
         }
         
         return statusMsg;
+    }
+
+    public getActiveTrades(): TradeSetup[] {
+        return Array.from(this.activeTrades.values());
     }
 
     public async startAnalysis(symbol: string) {
@@ -287,11 +294,6 @@ ${candlesData}
                               `الرادار مستمر بمراقبة الصفقة لحظياً 👁️`;
 
         this.onBroadcastCb(signalMessage);
-
-        // Make sure live WS is tracking this symbol
-        if (this.monitorWs && this.monitorWs.readyState === WebSocket.OPEN) {
-            this.monitorWs.send(JSON.stringify({ ticks: trade.symbol, subscribe: 1 }));
-        }
     }
 
     private startMonitoringWs() {
@@ -301,10 +303,15 @@ ${candlesData}
         let lastNewsCheck = 0;
 
         this.monitorWs.on('open', () => {
-            // Subscribe to all currently active trades
-            for (const sym of this.activeTrades.keys()) {
-                this.monitorWs?.send(JSON.stringify({ ticks: sym, subscribe: 1 }));
-            }
+            // Poll price every 2 seconds for active trades
+            if (this.monitorInterval) clearInterval(this.monitorInterval);
+            this.monitorInterval = setInterval(() => {
+                if (this.monitorWs?.readyState === WebSocket.OPEN && this.activeTrades.size > 0) {
+                    for (const sym of this.activeTrades.keys()) {
+                        this.monitorWs.send(JSON.stringify({ ticks: sym }));
+                    }
+                }
+            }, 2000);
         });
 
         this.monitorWs.on('message', async (data: string) => {
@@ -339,6 +346,10 @@ ${candlesData}
         });
 
         this.monitorWs.on('close', () => {
+            if (this.monitorInterval) {
+                clearInterval(this.monitorInterval);
+                this.monitorInterval = null;
+            }
             if (this.isScanning) {
                 this.monitorWs = null;
                 setTimeout(() => this.startMonitoringWs(), 5000); // Reconnect
@@ -375,6 +386,7 @@ ${candlesData}
     public stopEngine() {
         this.isScanning = false;
         if (this.scanInterval) clearInterval(this.scanInterval);
+        if (this.monitorInterval) clearInterval(this.monitorInterval);
         if (this.monitorWs) this.monitorWs.close();
         this.monitorWs = null;
         this.activeTrades.clear();
