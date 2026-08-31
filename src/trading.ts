@@ -131,6 +131,11 @@ export class TradingEngine {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`);
             
+            const timeout = setTimeout(() => {
+                ws.close();
+                reject(new Error(`WebSocket Timeout fetching klines for ${symbol}`));
+            }, 10000);
+
             ws.on('open', () => {
                 ws.send(JSON.stringify({
                     ticks_history: symbol,
@@ -143,6 +148,7 @@ export class TradingEngine {
             });
 
             ws.on('message', (data: string) => {
+                clearTimeout(timeout);
                 const response = JSON.parse(data);
                 if (response.error) {
                     reject(new Error(response.error.message));
@@ -158,7 +164,10 @@ export class TradingEngine {
                 ws.close();
             });
 
-            ws.on('error', (err) => reject(err));
+            ws.on('error', (err) => {
+                clearTimeout(timeout);
+                reject(err);
+            });
         });
     }
 
@@ -191,44 +200,51 @@ ${candlesData}
 `;
 
         try {
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            hasTrade: {
-                                type: Type.BOOLEAN,
-                                description: "هل توجد فرصة تداول قوية تلبي جميع الشروط؟"
+            const timeoutPromise = new Promise<any>((_, reject) => 
+                setTimeout(() => reject(new Error("Gemini API Request Timed Out (15s limit)")), 15000)
+            );
+
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: "gemini-3.5-flash",
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                hasTrade: {
+                                    type: Type.BOOLEAN,
+                                    description: "هل توجد فرصة تداول قوية تلبي جميع الشروط؟"
+                                },
+                                type: {
+                                    type: Type.STRING,
+                                    description: "LONG أو SHORT (فقط في حال وجود فرصة)"
+                                },
+                                entryPrice: {
+                                    type: Type.NUMBER,
+                                    description: "سعر الدخول المقترح"
+                                },
+                                stopLoss: {
+                                    type: Type.NUMBER,
+                                    description: "سعر وقف الخسارة"
+                                },
+                                takeProfit: {
+                                    type: Type.NUMBER,
+                                    description: "سعر أخذ الربح (يجب أن يحقق R:R 1:2 على الأقل)"
+                                },
+                                reason: {
+                                    type: Type.STRING,
+                                    description: "سبب الدخول باختصار مع ذكر المدرسة الفنية المستخدمة باللغة العربية"
+                                }
                             },
-                            type: {
-                                type: Type.STRING,
-                                description: "LONG أو SHORT (فقط في حال وجود فرصة)"
-                            },
-                            entryPrice: {
-                                type: Type.NUMBER,
-                                description: "سعر الدخول المقترح"
-                            },
-                            stopLoss: {
-                                type: Type.NUMBER,
-                                description: "سعر وقف الخسارة"
-                            },
-                            takeProfit: {
-                                type: Type.NUMBER,
-                                description: "سعر أخذ الربح (يجب أن يحقق R:R 1:2 على الأقل)"
-                            },
-                            reason: {
-                                type: Type.STRING,
-                                description: "سبب الدخول باختصار مع ذكر المدرسة الفنية المستخدمة باللغة العربية"
-                            }
+                            required: ["hasTrade", "reason"]
                         },
-                        required: ["hasTrade", "reason"]
-                    },
-                    temperature: 0.2, // Low temperature for more analytical/consistent logic
-                }
-            });
+                        temperature: 0.2, // Low temperature for more analytical/consistent logic
+                    }
+                }),
+                timeoutPromise
+            ]);
 
             if (!response.text) return null;
 
