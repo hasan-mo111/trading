@@ -365,8 +365,17 @@ ${candlesData}
         else if (reason === 'STOP_LOSS') reasonStr = '❌ تم ضرب وقف الخسارة (Stop Loss).';
         else if (reason === 'NEWS_PROTECTION') reasonStr = '🛡️ إغلاق وقائي بسبب الأخبار.';
 
-        const profitCalc = trade.type === 'LONG' ? (closePrice - trade.entryPrice) : (trade.entryPrice - closePrice);
-        const profitPercent = (profitCalc / trade.entryPrice * 100).toFixed(2);
+        // حساب الأرباح بناءً على إدارة مخاطر حقيقية (المخاطرة بـ 1% من الحساب في كل صفقة)
+        const slDistance = Math.abs(trade.entryPrice - trade.stopLoss);
+        const priceMove = trade.type === 'LONG' ? (closePrice - trade.entryPrice) : (trade.entryPrice - closePrice);
+        
+        let profitPercentStr = '0.00';
+        if (slDistance > 0) {
+            const riskPercent = 1.0; // 1% account risk per trade
+            const rMultiple = priceMove / slDistance;
+            const profitPercent = rMultiple * riskPercent;
+            profitPercentStr = profitPercent.toFixed(2);
+        }
         
         store.addTrade({
             symbol: trade.symbol,
@@ -374,13 +383,13 @@ ${candlesData}
             entryPrice: trade.entryPrice,
             closePrice: closePrice,
             reason: reasonStr,
-            profitPercent: profitPercent,
+            profitPercent: profitPercentStr,
             status: 'CLOSED'
         });
         
         this.onBroadcastCb(`🔔 <b>إغلاق صفقة (${trade.symbol})</b>\n\n` +
                            `السعر وقت الإغلاق: ${closePrice.toFixed(4)}\n` +
-                           `النتيجة: ${reasonStr} (${profitPercent}%)\n`);
+                           `النتيجة: ${reasonStr} (${profitPercentStr}%)\n`);
     }
 
     public stopEngine() {
