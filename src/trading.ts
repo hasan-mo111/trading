@@ -372,7 +372,7 @@ export class TradingEngine {
             }
 
             // Paper Trading Fallback
-            if (res.msg_type === 'tick' && !this.derivToken) {
+            if (res.msg_type === 'tick' && res.tick && !this.derivToken) {
                 const currentPrice = parseFloat(res.tick.quote);
                 const trade = this.activeTrades.get(SYMBOL);
                 if (!trade) return;
