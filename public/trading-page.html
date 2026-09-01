@@ -148,12 +148,12 @@
                                 </div>
                             </div>
                             <div class="space-y-2 mb-4 font-mono text-sm bg-dark-900 p-3 rounded-xl border border-dark-border">
-                                <div class="flex justify-between text-gray-400"><span>السعر الحالي:</span> <span class="font-bold text-white">${trade.currentPrice ? trade.currentPrice.toFixed(4) : 'جاري الجلب...'}</span></div>
+                                <div class="flex justify-between text-gray-400"><span>السعر الحالي:</span> <span class="font-bold text-white">${trade.currentPrice ? trade.currentPrice.toFixed(2) : 'جاري الجلب...'}</span></div>
                                 <div class="flex justify-between text-gray-400"><span>الربح/الخسارة:</span> <span class="font-bold ${parseFloat(trade.currentPnLPercent) > 0 ? 'text-emerald-400' : parseFloat(trade.currentPnLPercent) < 0 ? 'text-rose-400' : 'text-gray-400'}">${parseFloat(trade.currentPnLPercent) > 0 ? '+' : ''}${trade.currentPnLPercent || '0.00'}%</span></div>
                                 <div class="w-full h-px bg-dark-border my-2"></div>
-                                <div class="flex justify-between text-gray-400 text-xs"><span>سعر الدخول:</span> <span>${trade.entryPrice.toFixed(4)}</span></div>
-                                <div class="flex justify-between text-gray-400 text-xs"><span>الهدف (TP):</span> <span class="text-emerald-400/70">${trade.takeProfit.toFixed(4)}</span></div>
-                                <div class="flex justify-between text-gray-400 text-xs"><span>الوقف (SL):</span> <span class="text-rose-400/70">${trade.stopLoss.toFixed(4)}</span></div>
+                                <div class="flex justify-between text-gray-400 text-xs"><span>سعر الدخول:</span> <span>${trade.entryPrice.toFixed(2)}</span></div>
+                                <div class="flex justify-between text-gray-400 text-xs"><span>الهدف (TP):</span> <span class="text-emerald-400/70">${trade.takeProfit.toFixed(2)}</span></div>
+                                <div class="flex justify-between text-gray-400 text-xs"><span>الوقف (SL):</span> <span class="text-rose-400/70">${trade.stopLoss.toFixed(2)}</span></div>
                             </div>
                             <p class="text-xs text-gray-400 bg-dark-700/50 p-3 rounded-lg leading-relaxed font-sans">
                                 <i class="fa-solid fa-brain text-purple-400 ml-1"></i> ${trade.reason.replace('🤖 (تحليل الذكاء الاصطناعي - Gemini):\\n', '')}
@@ -175,8 +175,8 @@
                             <tr class="hover:bg-dark-700/30 transition-colors">
                                 <td class="p-4 font-bold text-white">${trade.symbol}</td>
                                 <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${trade.type === 'LONG' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">${trade.type}</span></td>
-                                <td class="p-4 text-gray-300">${trade.entryPrice.toFixed(4)}</td>
-                                <td class="p-4 text-gray-300">${trade.closePrice.toFixed(4)}</td>
+                                <td class="p-4 text-gray-300">${trade.entryPrice.toFixed(2)}</td>
+                                <td class="p-4 text-gray-300">${trade.closePrice.toFixed(2)}</td>
                                 <td class="p-4 font-bold ${profit > 0 ? 'text-emerald-400' : 'text-rose-400'}">${profit > 0 ? '+' : ''}${trade.profitPercent}%</td>
                                 <td class="p-4 text-gray-400 text-xs max-w-xs truncate" title="${trade.reason}">${trade.reason}</td>
                                 <td class="p-4 text-gray-500 text-xs">${date}</td>

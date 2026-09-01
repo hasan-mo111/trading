@@ -1,31 +1,10 @@
 import WebSocket from 'ws';
-import { GoogleGenAI, Type } from '@google/genai';
-import { checkUpcomingHighImpactNews } from './news.ts';
+import { SMA, MACD } from 'technicalindicators';
 import { store } from './store.ts';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
 const DERIV_APP_ID = 1089;
-
-const TOP_10_PAIRS = [
-    'frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxUSDCHF', 
-    'frxAUDUSD', 'frxUSDCAD', 'frxNZDUSD', 'frxEURGBP', 
-    'frxEURJPY', 'frxXAUUSD'
-];
-
-interface Candle {
-    high: number;
-    low: number;
-    close: number;
-    open: number;
-}
+const WS_URL = `wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`;
+const SYMBOL = 'frxXAUUSD';
 
 export interface TradeSetup {
     symbol: string;
@@ -36,6 +15,9 @@ export interface TradeSetup {
     reason: string;
     currentPrice?: number;
     currentPnLPercent?: string;
+    contractId?: number;
+    highestPriceReached?: number;
+    lowestPriceReached?: number;
 }
 
 export class TradingEngine {
@@ -46,11 +28,10 @@ export class TradingEngine {
     private lastScanTime: Date | null = null;
     private scanCount: number = 0;
     
-    private monitorInterval: NodeJS.Timeout | null = null;
-    
     private onMessageCb: (msg: string) => void;
     private onBroadcastCb: (msg: string) => void;
 
+    private derivToken = process.env.DERIV_API_TOKEN || '';
 
     constructor(onMessage: (msg: string) => void, onBroadcast: (msg: string) => void) {
         this.onMessageCb = onMessage;
@@ -59,20 +40,16 @@ export class TradingEngine {
 
     public getStatus(): string {
         if (!this.isScanning) {
-            return '⚪ الرادار متوقف حالياً. (استخدم /analyze للتشغيل)';
+            return '⚪ رادار الذهب متوقف حالياً. (استخدم /analyze للتشغيل)';
         }
         
         const activeCount = this.activeTrades.size;
         const scanTimeStr = this.lastScanTime ? this.lastScanTime.toLocaleTimeString('ar-EG', { timeZone: 'Asia/Riyadh' }) : 'لم يتم المسح بعد';
         
-        let statusMsg = `🟢 <b>حالة الرادار: نشط</b>\n\n`;
-        statusMsg += `🔄 عدد دورات المسح المكتملة: ${this.scanCount}\n`;
-        statusMsg += `⏱️ آخر مسح تم في: ${scanTimeStr} (بتوقيت السعودية)\n`;
-        statusMsg += `📈 الصفقات المفتوحة حالياً: ${activeCount}\n`;
-        
-        if (activeCount > 0) {
-            statusMsg += `\nالأزواج النشطة: ` + Array.from(this.activeTrades.keys()).join(', ');
-        }
+        let statusMsg = `🟢 <b>حالة رادار الذهب (Druckenmiller): نشط</b>\n\n`;
+        statusMsg += `🔄 دورات المسح: ${this.scanCount}\n`;
+        statusMsg += `⏱️ آخر مسح: ${scanTimeStr}\n`;
+        statusMsg += `📈 صفقات الذهب النشطة: ${activeCount}\n`;
         
         return statusMsg;
     }
@@ -81,59 +58,32 @@ export class TradingEngine {
         return Array.from(this.activeTrades.values());
     }
 
-    public async startAnalysis(symbol: string) {
+    public async startAnalysis(symbol?: string) {
         if (this.isScanning) {
             this.onMessageCb(`⚠️ النظام يقوم بالفعل بالبحث عن صفقات.`);
             return;
         }
 
-        const pairsToScan = (symbol && symbol.trim() !== '') 
-            ? [symbol.toUpperCase() === 'XAUUSD' ? 'frxXAUUSD' : symbol] 
-            : TOP_10_PAIRS;
+        if (!this.derivToken) {
+            this.onMessageCb(`⚠️ يرجى إضافة DERIV_API_TOKEN في الإعدادات للتمكن من فتح الصفقات وتتبعها.`);
+        }
 
         this.isScanning = true;
-        this.onMessageCb(`🔍 تم تشغيل رادار القنص المتقدم...\n\nجاري مسح الأزواج التالية:\n${pairsToScan.join(', ')}\n\nيتم تحديد نوع السوق (عرضي/صاعد/هابط) واستخدام مدارس تحليل مختلفة بـ (R:R 1:2).`);
+        this.onMessageCb(`🔍 تم تشغيل رادار قنص الذهب باستراتيجية (Druckenmiller)...\nجاري مراقبة XAU/USD بدقة للبحث عن فرص...`);
         
-        // Scan immediately, then every 15 minutes
-        this.scanPairs(pairsToScan);
-        this.scanInterval = setInterval(() => this.scanPairs(pairsToScan), 15 * 60 * 1000);
+        this.scanXAUUSD();
+        this.scanInterval = setInterval(() => this.scanXAUUSD(), 15 * 60 * 1000); // 15m
         
-        // Start live monitor connection
         this.startMonitoringWs();
     }
 
-    private async scanPairs(pairs: string[]) {
-        let newTrades = 0;
-        for (const sym of pairs) {
-            if (this.activeTrades.has(sym)) continue; // Skip if already have an active trade for this pair
-
-            try {
-                await new Promise(res => setTimeout(res, 8000)); // تأخير 8 ثواني لتفادي حظر الطلبات
-                const signal = await this.analyzePair(sym);
-                if (signal) {
-                    this.executeTrade(signal);
-                    newTrades++;
-                }
-            } catch (err) {
-                console.error(`Error scanning ${sym}:`, err);
-            }
-        }
-        
-        this.lastScanTime = new Date();
-        this.scanCount++;
-
-        if (this.scanCount === 1 && newTrades === 0) {
-            this.onMessageCb('✅ اكتملت دورة المسح الأولى!\nلم يتم العثور على فرص تطابق الشروط الصارمة حالياً.\nالرادار مستمر في الخلفية (كل 15 دقيقة) وسيعلمك فور التقاط فرصة ذهبية.');
-        }
-    }
-
-    private async fetchKlines(symbol: string, granularity: number, limit: number = 250): Promise<Candle[]> {
+    private async fetchKlines(symbol: string, granularity: number, limit: number = 250): Promise<any[]> {
         return new Promise((resolve, reject) => {
-            const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`);
+            const ws = new WebSocket(WS_URL);
             
             const timeout = setTimeout(() => {
                 ws.close();
-                reject(new Error(`WebSocket Timeout fetching klines for ${symbol}`));
+                reject(new Error(`WebSocket Timeout`));
             }, 10000);
 
             ws.on('open', () => {
@@ -143,7 +93,7 @@ export class TradingEngine {
                     count: limit,
                     end: "latest",
                     style: "candles",
-                    granularity: granularity // Timeframe in seconds
+                    granularity: granularity
                 }));
             });
 
@@ -171,125 +121,139 @@ export class TradingEngine {
         });
     }
 
-    private async analyzePair(symbol: string): Promise<TradeSetup | null> {
-        // Fetch last 30 candles on 15m timeframe for precision analysis
-        const m15Candles = await this.fetchKlines(symbol, 900, 30);
-        if (m15Candles.length < 30) return null;
+    private async checkMacroTrend(): Promise<'UP' | 'DOWN' | 'NEUTRAL'> {
+        // Daily candles (86400 seconds)
+        const dailyCandles = await this.fetchKlines(SYMBOL, 86400, 200).catch(() => []);
+        if (dailyCandles.length < 200) return 'NEUTRAL';
+
+        const closes = dailyCandles.map(c => c.close);
+        const sma200 = SMA.calculate({ period: 200, values: closes });
         
-        const currentPrice = m15Candles[m15Candles.length - 1].close;
+        if (sma200.length === 0) return 'NEUTRAL';
+        
+        const currentPrice = closes[closes.length - 1];
+        const currentSma = sma200[sma200.length - 1];
 
-        // Format candles for Gemini
-        const candlesData = m15Candles.map((c, i) => 
-            `Candle ${i+1}: Open=${c.open}, High=${c.high}, Low=${c.low}, Close=${c.close}`
-        ).join('\n');
+        return currentPrice > currentSma ? 'UP' : 'DOWN';
+    }
 
-        const prompt = `
-أنت متداول محترف في الفوركس و محلل فني خبير يدمج بين مدارس متعددة (Price Action, Smart Money Concepts, ICT, العرض والطلب, والمؤشرات الفنية).
-يجب عليك تحليل آخر 30 شمعة (فريم 15 دقيقة) للزوج: ${symbol}
-
-بيانات الشموع:
-${candlesData}
-
-المطلوب:
-1. قم بتحليل الاتجاه العام وهيكل السوق (Market Structure).
-2. حدد ما إذا كان هناك فرصة تداول قوية (Long أو Short) أو إذا كان الأفضل البقاء خارج السوق (No Trade).
-3. **شرط صارم جداً:** يجب أن تكون نسبة العائد إلى المخاطرة (Reward to Risk Ratio) لا تقل عن 1:2 أو أعلى. (أي أن المسافة من نقطة الدخول إلى الهدف يجب أن تكون ضعف المسافة من نقطة الدخول إلى وقف الخسارة على الأقل).
-4. اذكر سبب الدخول بوضوح وبشكل مقنع يشرح المدرسة الفنية المستخدمة.
-
-قم بإرجاع النتيجة بصيغة JSON فقط متوافقة مع هذا الهيكل:
-`;
+    private async scanXAUUSD() {
+        if (this.activeTrades.has(SYMBOL)) return; // Already in trade
 
         try {
-            const timeoutPromise = new Promise<any>((_, reject) => 
-                setTimeout(() => reject(new Error("Gemini API Request Timed Out (15s limit)")), 15000)
-            );
-
-            const response = await Promise.race([
-                ai.models.generateContent({
-                    model: "gemini-3.5-flash",
-                    contents: prompt,
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: Type.OBJECT,
-                            properties: {
-                                hasTrade: {
-                                    type: Type.BOOLEAN,
-                                    description: "هل توجد فرصة تداول قوية تلبي جميع الشروط؟"
-                                },
-                                type: {
-                                    type: Type.STRING,
-                                    description: "LONG أو SHORT (فقط في حال وجود فرصة)"
-                                },
-                                entryPrice: {
-                                    type: Type.NUMBER,
-                                    description: "سعر الدخول المقترح"
-                                },
-                                stopLoss: {
-                                    type: Type.NUMBER,
-                                    description: "سعر وقف الخسارة"
-                                },
-                                takeProfit: {
-                                    type: Type.NUMBER,
-                                    description: "سعر أخذ الربح (يجب أن يحقق R:R 1:2 على الأقل)"
-                                },
-                                reason: {
-                                    type: Type.STRING,
-                                    description: "سبب الدخول باختصار مع ذكر المدرسة الفنية المستخدمة باللغة العربية"
-                                }
-                            },
-                            required: ["hasTrade", "reason"]
-                        },
-                        temperature: 0.2, // Low temperature for more analytical/consistent logic
-                    }
-                }),
-                timeoutPromise
-            ]);
-
-            if (!response.text) return null;
-
-            const aiAnalysis = JSON.parse(response.text.trim());
-
-            if (!aiAnalysis.hasTrade) {
-                return null; // No setup identified by Gemini
-            }
-
-            // Fallback safety check: verify R:R ratio programmatically
-            const entry = aiAnalysis.entryPrice;
-            const sl = aiAnalysis.stopLoss;
-            const tp = aiAnalysis.takeProfit;
-
-            if (!entry || !sl || !tp) return null;
-
-            const risk = Math.abs(entry - sl);
-            const reward = Math.abs(tp - entry);
-
-            if (risk === 0 || reward / risk < 1.9) {
-                // R:R is less than ~2, reject this setup
-                console.log(`[Gemini] Rejected ${symbol} trade due to bad R:R. Risk: ${risk}, Reward: ${reward}`);
-                return null;
-            }
+            const macroTrend = await this.checkMacroTrend();
             
-            // Ensure logic matches LONG/SHORT
-            if (aiAnalysis.type === 'LONG' && tp < entry) return null;
-            if (aiAnalysis.type === 'SHORT' && tp > entry) return null;
+            // Fetch 15m candles for trigger
+            const m15Candles = await this.fetchKlines(SYMBOL, 900, 100);
+            if (m15Candles.length < 50) return;
 
-            return {
-                symbol,
-                type: aiAnalysis.type as 'LONG' | 'SHORT',
-                entryPrice: currentPrice, // Execute at current market price
-                stopLoss: sl,
-                takeProfit: tp,
-                reason: `🤖 (تحليل الذكاء الاصطناعي - Gemini):\n` + aiAnalysis.reason
+            const closes = m15Candles.map(c => c.close);
+            const currentPrice = closes[closes.length - 1];
+
+            const macdInput = {
+                values: closes,
+                fastPeriod: 12,
+                slowPeriod: 26,
+                signalPeriod: 9,
+                SimpleMAOscillator: false,
+                SimpleMASignal: false
             };
 
-        } catch (error) {
-            console.error("Gemini Analysis Error:", error);
-            return null;
+            const macdResult = MACD.calculate(macdInput);
+            if (macdResult.length < 2) return;
+
+            const lastMacd = macdResult[macdResult.length - 1];
+            const prevMacd = macdResult[macdResult.length - 2];
+
+            if (!lastMacd.histogram || !prevMacd.histogram) return;
+
+            let setup: TradeSetup | null = null;
+
+            // Long Trigger: Macro is UP, MACD Histogram crosses above 0
+            if (macroTrend === 'UP' && prevMacd.histogram < 0 && lastMacd.histogram > 0) {
+                setup = {
+                    symbol: SYMBOL,
+                    type: 'LONG',
+                    entryPrice: currentPrice,
+                    stopLoss: currentPrice * 0.995, // 0.5% Hard Stop
+                    takeProfit: currentPrice * 1.02, // 2% Take Profit
+                    reason: "📈 الاتجاه الكلي صاعد (السعر فوق MA 200 يومي). \nالزناد: تقاطع إيجابي MACD على فريم 15 دقيقة (Breakout Momentum)."
+                };
+            }
+            // Short Trigger: Macro is DOWN, MACD Histogram crosses below 0
+            else if (macroTrend === 'DOWN' && prevMacd.histogram > 0 && lastMacd.histogram < 0) {
+                setup = {
+                    symbol: SYMBOL,
+                    type: 'SHORT',
+                    entryPrice: currentPrice,
+                    stopLoss: currentPrice * 1.005, // 0.5% Hard Stop
+                    takeProfit: currentPrice * 0.98, // 2% Take Profit
+                    reason: "📉 الاتجاه الكلي هابط (السعر تحت MA 200 يومي). \nالزناد: تقاطع سلبي MACD على فريم 15 دقيقة."
+                };
+            }
+
+            if (setup) {
+                await this.executeDerivTrade(setup);
+            }
+
+            this.lastScanTime = new Date();
+            this.scanCount++;
+        } catch (err) {
+            console.error("Error scanning XAUUSD:", err);
         }
     }
 
-    private executeTrade(trade: TradeSetup) {
+    private async executeDerivTrade(trade: TradeSetup) {
+        if (!this.derivToken) {
+            // Paper trade simulation if no token
+            this.handleTradeOpened(trade, null);
+            return;
+        }
+
+        const ws = new WebSocket(WS_URL);
+        
+        ws.on('open', () => {
+            ws.send(JSON.stringify({ authorize: this.derivToken }));
+        });
+
+        ws.on('message', (data: string) => {
+            const res = JSON.parse(data);
+            
+            if (res.error) {
+                this.onBroadcastCb(`❌ خطأ أثناء تنفيذ صفقة الذهب: ${res.error.message}`);
+                ws.close();
+                return;
+            }
+
+            if (res.msg_type === 'authorize') {
+                // Execute Buy
+                ws.send(JSON.stringify({
+                    buy: 1,
+                    price: 100, // example stake
+                    parameters: {
+                        amount: 10,
+                        basis: "stake",
+                        contract_type: trade.type === 'LONG' ? "MULTUP" : "MULTDOWN",
+                        currency: "USD",
+                        multiplier: 100,
+                        symbol: trade.symbol
+                    }
+                }));
+            }
+
+            if (res.msg_type === 'buy') {
+                const contractId = res.buy.contract_id;
+                this.handleTradeOpened(trade, contractId);
+                ws.close();
+            }
+        });
+    }
+
+    private handleTradeOpened(trade: TradeSetup, contractId: number | null) {
+        trade.contractId = contractId || Math.floor(Math.random() * 1000000); // mock id if paper
+        trade.highestPriceReached = trade.entryPrice;
+        trade.lowestPriceReached = trade.entryPrice;
+        
         this.activeTrades.set(trade.symbol, trade);
 
         store.addTrade({
@@ -301,139 +265,195 @@ ${candlesData}
             status: 'OPEN'
         });
 
-        const signalMessage = `🚨 <b>فرصة قنص جديدة تم التقاطها!</b> 🚨\n\n` +
-                              `الزوج: #${trade.symbol}\n` +
+        const signalMessage = `🚨 <b>تم فتح صفقة ذهب (Druckenmiller Strategy)!</b> 🚨\n\n` +
                               `النوع: ${trade.type === 'LONG' ? 'شراء 🟢' : 'بيع 🔴'}\n` +
-                              `السعر: ${trade.entryPrice.toFixed(4)}\n` +
-                              `الأهداف: ${trade.takeProfit.toFixed(4)}\n` +
-                              `الوقف: ${trade.stopLoss.toFixed(4)}\n` +
-                              `مخاطرة/عائد (R:R): 1:2 ⚖️\n\n` +
-                              `📝 <b>سبب الدخول:</b>\n${trade.reason}\n\n` +
-                              `الرادار مستمر بمراقبة الصفقة لحظياً 👁️`;
+                              `السعر: ${trade.entryPrice.toFixed(2)}\n` +
+                              `الوقف الصارم: ${trade.stopLoss.toFixed(2)}\n\n` +
+                              `📝 <b>السبب:</b>\n${trade.reason}\n\n` +
+                              `الرادار سيقوم بتتبع العقد لحظياً وتحريك الوقف (Trailing Stop) لتأمين الأرباح! 👁️`;
 
         this.onBroadcastCb(signalMessage);
+
+        // If WS monitor is connected, subscribe to the new contract
+        if (this.monitorWs && this.monitorWs.readyState === WebSocket.OPEN && this.derivToken && contractId) {
+            this.monitorWs.send(JSON.stringify({
+                proposal_open_contract: 1,
+                contract_id: contractId,
+                subscribe: 1
+            }));
+        }
     }
 
     private startMonitoringWs() {
         if (this.monitorWs) return;
 
-        this.monitorWs = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`);
-        let lastNewsCheck = 0;
+        this.monitorWs = new WebSocket(WS_URL);
+        let pingInterval: NodeJS.Timeout;
 
         this.monitorWs.on('open', () => {
-            // Poll price every 2 seconds for active trades
-            if (this.monitorInterval) clearInterval(this.monitorInterval);
-            this.monitorInterval = setInterval(() => {
-                if (this.monitorWs?.readyState === WebSocket.OPEN && this.activeTrades.size > 0) {
-                    for (const sym of this.activeTrades.keys()) {
-                        this.monitorWs.send(JSON.stringify({ ticks: sym }));
-                    }
+            if (this.derivToken) {
+                this.monitorWs!.send(JSON.stringify({ authorize: this.derivToken }));
+            } else {
+                // Paper mode tracking fallback via ticks
+                this.monitorWs!.send(JSON.stringify({ ticks: SYMBOL }));
+            }
+            
+            // Keep alive
+            pingInterval = setInterval(() => {
+                if (this.monitorWs?.readyState === WebSocket.OPEN) {
+                    this.monitorWs.send(JSON.stringify({ ping: 1 }));
                 }
-            }, 2000);
+            }, 30000);
         });
 
         this.monitorWs.on('message', async (data: string) => {
-            const response = JSON.parse(data);
-            if (response.error || !response.tick) return;
+            const res = JSON.parse(data);
 
-            const symbol = response.tick.symbol;
-            const currentPrice = parseFloat(response.tick.quote);
-
-            const trade = this.activeTrades.get(symbol);
-            if (!trade) return;
-
-            // Update current price and PnL
-            trade.currentPrice = currentPrice;
-            const slDistance = Math.abs(trade.entryPrice - trade.stopLoss);
-            const priceMove = trade.type === 'LONG' ? (currentPrice - trade.entryPrice) : (trade.entryPrice - currentPrice);
-            
-            if (slDistance > 0) {
-                const riskPercent = 1.0; // 1% account risk per trade
-                const rMultiple = priceMove / slDistance;
-                const profitPercent = rMultiple * riskPercent;
-                // If 1% risk means -100% loss in user terms, we should format it as rMultiple * 100
-                // User asked for: "100% loss closes the trade, 200% profit means tp"
-                // So the percentage is just rMultiple * 100
-                trade.currentPnLPercent = (rMultiple * 100).toFixed(2);
-            } else {
-                trade.currentPnLPercent = '0.00';
+            if (res.msg_type === 'authorize') {
+                // Re-subscribe to all active open contracts upon reconnection
+                for (const trade of this.activeTrades.values()) {
+                    if (trade.contractId) {
+                        this.monitorWs!.send(JSON.stringify({
+                            proposal_open_contract: 1,
+                            contract_id: trade.contractId,
+                            subscribe: 1
+                        }));
+                    }
+                }
             }
 
-            // Check TP / SL
-            if (trade.type === 'LONG') {
-                if (currentPrice >= trade.takeProfit) this.closeTrade(trade, currentPrice, 'TAKE_PROFIT');
-                else if (currentPrice <= trade.stopLoss) this.closeTrade(trade, currentPrice, 'STOP_LOSS');
-            } else {
-                if (currentPrice <= trade.takeProfit) this.closeTrade(trade, currentPrice, 'TAKE_PROFIT');
-                else if (currentPrice >= trade.stopLoss) this.closeTrade(trade, currentPrice, 'STOP_LOSS');
+            // Real Contract Tracking (Real-time tracking loop)
+            if (res.msg_type === 'proposal_open_contract' && res.proposal_open_contract) {
+                const contract = res.proposal_open_contract;
+                const trade = Array.from(this.activeTrades.values()).find(t => t.contractId === contract.contract_id);
+                if (!trade) return;
+
+                const currentPrice = parseFloat(contract.current_spot);
+                const profitPercent = parseFloat(contract.profit_percentage);
+                trade.currentPrice = currentPrice;
+                trade.currentPnLPercent = profitPercent.toFixed(2);
+
+                if (contract.is_sold) {
+                    this.closeTrade(trade, currentPrice, profitPercent > 0 ? 'TAKE_PROFIT' : 'STOP_LOSS', profitPercent);
+                    return;
+                }
+
+                // Trailing Stop Logic (Druckenmiller Fast Cut & Let Profit Run)
+                if (trade.type === 'LONG') {
+                    if (currentPrice > (trade.highestPriceReached || trade.entryPrice)) {
+                        trade.highestPriceReached = currentPrice;
+                        // Move SL up if profit > 1%
+                        if (currentPrice > trade.entryPrice * 1.01) {
+                            const newSL = currentPrice * 0.995; // Trail by 0.5%
+                            if (newSL > trade.stopLoss) {
+                                trade.stopLoss = newSL;
+                            }
+                        }
+                    }
+                    
+                    // Hard Close if below Stop Loss
+                    if (currentPrice <= trade.stopLoss) {
+                        this.sellContract(trade.contractId!, currentPrice, trade);
+                    }
+                } else {
+                    if (currentPrice < (trade.lowestPriceReached || trade.entryPrice)) {
+                        trade.lowestPriceReached = currentPrice;
+                        if (currentPrice < trade.entryPrice * 0.99) {
+                            const newSL = currentPrice * 1.005; // Trail by 0.5%
+                            if (newSL < trade.stopLoss) {
+                                trade.stopLoss = newSL;
+                            }
+                        }
+                    }
+                    if (currentPrice >= trade.stopLoss) {
+                        this.sellContract(trade.contractId!, currentPrice, trade);
+                    }
+                }
             }
 
-            // Periodically check news (every 5 mins) to protect capital
-            const now = Date.now();
-            if (now - lastNewsCheck > 5 * 60 * 1000) {
-                lastNewsCheck = now;
-                const hasNews = await checkUpcomingHighImpactNews(symbol).catch(() => false);
-                if (hasNews && this.activeTrades.has(symbol)) {
-                    this.onBroadcastCb(`⚠️ <b>تنبيه أخبار هامة!</b> ⚠️\nخبر قوي سيصدر قريباً قد يعصف بـ ${symbol}.\nتم إغلاق الصفقة فوراً لحماية رأس المال.`);
-                    this.closeTrade(trade, currentPrice, 'NEWS_PROTECTION');
+            // Paper Trading Fallback
+            if (res.msg_type === 'tick' && !this.derivToken) {
+                const currentPrice = parseFloat(res.tick.quote);
+                const trade = this.activeTrades.get(SYMBOL);
+                if (!trade) return;
+
+                trade.currentPrice = currentPrice;
+                
+                const slDist = Math.abs(trade.entryPrice - trade.stopLoss);
+                const moved = trade.type === 'LONG' ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice;
+                trade.currentPnLPercent = ((moved / slDist) * 100).toFixed(2);
+
+                if (trade.type === 'LONG') {
+                    if (currentPrice > (trade.highestPriceReached || trade.entryPrice)) {
+                        trade.highestPriceReached = currentPrice;
+                        if (currentPrice > trade.entryPrice * 1.01) {
+                            const newSL = currentPrice * 0.995;
+                            if (newSL > trade.stopLoss) trade.stopLoss = newSL;
+                        }
+                    }
+                    if (currentPrice <= trade.stopLoss) this.closeTrade(trade, currentPrice, 'STOP_LOSS', parseFloat(trade.currentPnLPercent));
+                    else if (currentPrice >= trade.takeProfit) this.closeTrade(trade, currentPrice, 'TAKE_PROFIT', parseFloat(trade.currentPnLPercent));
+                } else {
+                    if (currentPrice < (trade.lowestPriceReached || trade.entryPrice)) {
+                        trade.lowestPriceReached = currentPrice;
+                        if (currentPrice < trade.entryPrice * 0.99) {
+                            const newSL = currentPrice * 1.005;
+                            if (newSL < trade.stopLoss) trade.stopLoss = newSL;
+                        }
+                    }
+                    if (currentPrice >= trade.stopLoss) this.closeTrade(trade, currentPrice, 'STOP_LOSS', parseFloat(trade.currentPnLPercent));
+                    else if (currentPrice <= trade.takeProfit) this.closeTrade(trade, currentPrice, 'TAKE_PROFIT', parseFloat(trade.currentPnLPercent));
                 }
             }
         });
 
         this.monitorWs.on('close', () => {
-            if (this.monitorInterval) {
-                clearInterval(this.monitorInterval);
-                this.monitorInterval = null;
-            }
+            clearInterval(pingInterval);
             if (this.isScanning) {
                 this.monitorWs = null;
-                setTimeout(() => this.startMonitoringWs(), 5000); // Reconnect
+                setTimeout(() => this.startMonitoringWs(), 3000); // Fast reconnect logic
             }
         });
     }
 
-    private closeTrade(trade: TradeSetup, closePrice: number, reason: 'TAKE_PROFIT' | 'STOP_LOSS' | 'NEWS_PROTECTION') {
-        this.activeTrades.delete(trade.symbol); // Remove from tracking
+    private sellContract(contractId: number, currentPrice: number, trade: TradeSetup) {
+        if (!this.monitorWs || this.monitorWs.readyState !== WebSocket.OPEN) return;
+        this.monitorWs.send(JSON.stringify({
+            sell: contractId,
+            price: 0 // sell at market
+        }));
+    }
+
+    private closeTrade(trade: TradeSetup, closePrice: number, reason: 'TAKE_PROFIT' | 'STOP_LOSS', finalProfitPercent: number) {
+        this.activeTrades.delete(trade.symbol);
 
         let reasonStr = '';
-        if (reason === 'TAKE_PROFIT') reasonStr = '✅ تم ضرب الهدف (Take Profit)! مبروك الأرباح. 🎯';
-        else if (reason === 'STOP_LOSS') reasonStr = '❌ تم ضرب وقف الخسارة (Stop Loss).';
-        else if (reason === 'NEWS_PROTECTION') reasonStr = '🛡️ إغلاق وقائي بسبب الأخبار.';
+        if (reason === 'TAKE_PROFIT') reasonStr = '✅ إغلاق رابح (Trailing/Take Profit)';
+        else if (reason === 'STOP_LOSS') reasonStr = '❌ قطع الخسارة الصارم (Stop Loss)';
 
-        // حساب الأرباح بناءً على إدارة مخاطر حقيقية (المخاطرة بـ 1% من الحساب في كل صفقة)
-        const slDistance = Math.abs(trade.entryPrice - trade.stopLoss);
-        const priceMove = trade.type === 'LONG' ? (closePrice - trade.entryPrice) : (trade.entryPrice - closePrice);
-        
-        let profitPercentStr = '0.00';
-        if (slDistance > 0) {
-            const rMultiple = priceMove / slDistance;
-            const profitPercent = rMultiple * 100; // Users want 100% loss for SL, 200% for TP (Risk-based %)
-            profitPercentStr = profitPercent.toFixed(2);
-        }
-        
         store.addTrade({
             symbol: trade.symbol,
             type: trade.type,
             entryPrice: trade.entryPrice,
             closePrice: closePrice,
             reason: reasonStr,
-            profitPercent: profitPercentStr,
+            profitPercent: finalProfitPercent.toFixed(2),
             status: 'CLOSED'
         });
         
-        this.onBroadcastCb(`🔔 <b>إغلاق صفقة (${trade.symbol})</b>\n\n` +
-                           `السعر وقت الإغلاق: ${closePrice.toFixed(4)}\n` +
-                           `النتيجة: ${reasonStr} (${profitPercentStr}%)\n`);
+        this.onBroadcastCb(`🔔 <b>إغلاق صفقة الذهب (${trade.symbol})</b>\n\n` +
+                           `السعر وقت الإغلاق: ${closePrice.toFixed(2)}\n` +
+                           `النتيجة: ${reasonStr} (${finalProfitPercent.toFixed(2)}%)\n`);
     }
 
     public stopEngine() {
         this.isScanning = false;
         if (this.scanInterval) clearInterval(this.scanInterval);
-        if (this.monitorInterval) clearInterval(this.monitorInterval);
-        if (this.monitorWs) this.monitorWs.close();
-        this.monitorWs = null;
+        if (this.monitorWs) {
+            this.monitorWs.close();
+            this.monitorWs = null;
+        }
         this.activeTrades.clear();
-        this.onMessageCb('🛑 تم إيقاف رادار الصفقات ومحرك المراقبة بنجاح.');
+        this.onMessageCb('🛑 تم إيقاف رادار الذهب ومحرك التتبع بنجاح.');
     }
 }
-
